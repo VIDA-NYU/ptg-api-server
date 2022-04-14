@@ -6,7 +6,7 @@ REST + Web Socket API to interact with the data store. The endpoints are secured
 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwdGciLCJleHAiOjE2NTI1NDU3MTl9.8S6dal-Q97TfJZG7rYLQWe5n3IovU9qCmtPYo7voNN4
 ```
 
-Besure to include the following field in all request header:
+Be sure to include the following field in all request header:
 ```
 Authorization: Bearer TOKEN
 ```
