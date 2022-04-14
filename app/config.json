@@ -1,0 +1,13 @@
+{
+    "root_path": "/",
+    "title": "PTG Data Store",
+    "description": "Use the README.md for description",
+    "redis": {
+        "connection": {
+            "url": "redis://127.0.0.1:6789",
+            "max_connections": 100
+        },
+        "meta_key": "ptg-dev"
+    },
+    "default_max_len": 1000
+}
