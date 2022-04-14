@@ -64,7 +64,7 @@ This is a blocking call, if there's no entry matched the condition (no later the
 
 ## Setup Instructions
 
-These instructions are for setting up the server environment. You don't need to go through these if you just want to use the API. For development, we have a server running [here](https://eng-nrf233-01.engineering.nyu.edu/docs).
+These instructions are for setting up the server environment. You don't need to go through these if you just want to use the API. For development, we have a server running [here](https://eng-nrf233-01.engineering.nyu.edu/ptg/api/docs).
 
 The code requires Python 3.10+ and rely on [Redis](https://redis.io/), [FastAPI](https://fastapi.tiangolo.com/), [Uvcorn](https://www.uvicorn.org/), [Gunicorn](https://gunicorn.org/) to run the server. It is easiest to create a Python's virtual environment for the server using [Miniconda](https://docs.conda.io/en/latest/miniconda.html) since some of the packages requires binary executables installed (`pip` should work with some additional environment settings but be sure that you have Python 3.10+ first).
 
