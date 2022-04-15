@@ -44,10 +44,11 @@ async def get_stream_info(
     error status code (400) is desired, set **report_error** to true.
     """
     meta, info = await DataStore.getStreamInfo(sid)
-    if hasattr(info, 'first-entry'):
-        info['first-entry'] = redis_id_to_iso(info['first-entry'][0])
-    if hasattr(info, 'last-entry'):
-        info['last-entry'] = redis_id_to_iso(info['last-entry'][0])
+    if type(info)==dict:
+        if info['first-entry']:
+            info['first-entry'] = redis_id_to_iso(info['first-entry'][0])
+        if info['last-entry']:
+            info['last-entry'] = redis_id_to_iso(info['last-entry'][0])
     response = {'meta': meta, 'info': info}
     isError = type(meta)==str or type(info)==str
     if report_error and isError:
