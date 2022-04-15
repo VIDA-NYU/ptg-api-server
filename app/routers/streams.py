@@ -23,7 +23,8 @@ async def get_stream_ids():
     and/or added directly by the data back-end (e.g. Redis) manually.
     """
     store = await DataStore.get()
-    return store.getStreamIds()
+    streamIds = await store.getStreamIds()
+    return streamIds
 
 @router.get('/{stream_id}', summary='Get information of a stream')
 async def get_stream_info(

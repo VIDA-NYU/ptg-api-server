@@ -40,8 +40,9 @@ class DataStore:
         value = orjson.dumps(self.meta)
         return ctx.redis.set(self.redisKey, value)
 
-    def getStreamIds(self) -> list[str]:
-        return list(self.meta['streams'].keys())
+    async def getStreamIds(self):
+        keys = await ctx.redis.keys()
+        return list(filter(lambda x: x.decode('utf-8')!=self.redisKey, keys))
 
     def hasStreamId(self, sid) -> bool:
         return sid in self.meta['streams']
