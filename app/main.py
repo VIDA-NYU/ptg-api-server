@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, Response
+from fastapi.middleware.cors import CORSMiddleware
 from app.context import Context
 from app.routers import data, misc, streams
 
@@ -12,6 +13,12 @@ app = FastAPI(title=ctx.config['title'],
 for r in routers:
     app.include_router(r.router)
 app.mount(ctx.config['root_path'], app)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
 
 @app.on_event('startup')
 async def startup():
