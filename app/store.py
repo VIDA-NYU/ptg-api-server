@@ -14,7 +14,7 @@ class DataStore:
         return store.load()
 
     @staticmethod
-    async def getStreamInfo(sid):
+    async def getStreamInfo(sid: str):
         key = ctx.config['redis']['meta_key']
         async with ctx.redis.pipeline() as pipe:
             meta, info = await pipe.get(key) \
@@ -44,10 +44,10 @@ class DataStore:
         keys = await ctx.redis.keys()
         return list(filter(lambda x: x.decode('utf-8')!=self.redisKey, keys))
 
-    def hasStreamId(self, sid) -> bool:
+    def hasStreamId(self, sid: str) -> bool:
         return sid in self.meta['streams']
 
-    def getStream(self, sid) -> dict:
+    def getStream(self, sid: str) -> dict:
         stream = self.meta['streams'][sid]
         stream['metadata'] = orjson.loads(stream.get('meta', '{}'))
         return stream
@@ -61,7 +61,7 @@ class DataStore:
         }
         return self.save()
 
-    async def deleteStream(self, sid):
+    async def deleteStream(self, sid: str):
         stream = self.meta['streams'].pop(sid, None)
         if stream:
             await self.save()
@@ -70,7 +70,7 @@ class DataStore:
 class DataStream:
 
     @staticmethod
-    async def addEntries(sid, entries):
+    async def addEntries(sid: str, entries: list[bytes]):
         maxlen = ctx.config['default_max_len']
         async with ctx.redis.pipeline() as pipe:
             for entry in entries:
@@ -79,7 +79,7 @@ class DataStream:
         return res
 
     @staticmethod
-    async def getEntries(sid, count, last, block=None):
+    async def getEntries(sid: str, count: int, last: str, block: int = None):
         if last=='*':
             entries = reversed(await ctx.redis.xrevrange(sid, count=count))
         else:

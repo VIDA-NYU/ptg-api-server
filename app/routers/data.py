@@ -21,15 +21,15 @@ PARAM_STREAM_ID = Path(None, alias='stream_id', description='The unique ID of th
 @router.post('/{stream_id}', summary='Send data to a stream')
 async def send_data_entries(
         sid: str = PARAM_STREAM_ID,
-        entries: list[bytes] | None = File(..., desc='A list of data entries (as multiform files) to be added into the stream.')):
+        entries: list[bytes] | None = File(..., description='A list of data entries (as multiform files) to be added into the stream.')):
     res = await DataStream.addEntries(sid, entries)
     return res
 
 @router.get('/{stream_id}', summary='Retrieve data from a stream', response_class=StreamingResponse)
 async def get_data_entries(
         sid: str = PARAM_STREAM_ID,
-        count:  int | None = Query(1, desc="The maximum number of elements to be returned"),
-        last_entry_id: str | None = Query('*', desc="Only retrieve entries later than the provided ID")):
+        count:  int | None = Query(1, description="The maximum number of elements to be returned"),
+        last_entry_id: str | None = Query('*', description="Only retrieve entries later than the provided ID")):
     """This retrieves **count** elements that have later timestamps
     than **last_entry_id** from the specified data stream. The entry
     ID should be in the form of:
@@ -60,8 +60,8 @@ async def get_data_entries(
 async def push_data_ws(
         ws: WebSocket,
         sid: str = PARAM_STREAM_ID,
-        batch:  bool | None = Query(False, desc="set to 'true' if entries will be sent in batches (alternate one text, one bytes)"),
-        ack: bool | None = Query(False, desc="set to 'true' if would like the server to respond to each entry/batch with inserted entry IDs")):
+        batch:  bool | None = Query(False, description="set to 'true' if entries will be sent in batches (alternate one text, one bytes)"),
+        ack: bool | None = Query(False, description="set to 'true' if would like the server to respond to each entry/batch with inserted entry IDs")):
     """
     """
     if not (await UserAuth.authorizeWebSocket(ws)):
@@ -89,8 +89,8 @@ async def push_data_ws(
 async def pull_data_ws(
         ws: WebSocket,
         sid: str = PARAM_STREAM_ID,
-        count:  int | None = Query(1, desc="the maximum number of entries for each receive"),
-        last_entry_id: str | None = Query('$', desc="Start retrieving entries laters than the provided ID")):
+        count:  int | None = Query(1, description="the maximum number of entries for each receive"),
+        last_entry_id: str | None = Query('$', description="Start retrieving entries laters than the provided ID")):
     """
     """
     if not (await UserAuth.authorizeWebSocket(ws)):

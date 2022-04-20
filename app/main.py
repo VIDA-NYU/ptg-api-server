@@ -1,10 +1,10 @@
 from fastapi import FastAPI, APIRouter, Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.context import Context
-from app.routers import data, misc, streams
+from app.routers import data, misc, procedure, streams
 
 ctx = Context.instance()
-routers = [misc, streams, data, ]
+routers = [misc, streams, data, procedure]
 tags = sum(map(lambda x: x.tags, routers), [])
 app = FastAPI(title=ctx.config['title'],
               description=ctx.getDescription(),

@@ -29,7 +29,7 @@ async def get_stream_ids():
 @router.get('/{stream_id}', summary='Get information of a stream')
 async def get_stream_info(
         sid: str = PARAM_STREAM_ID,
-        report_error: bool | None = Query(False, desc="set to 'true' to return an error code if the stream is not found")):
+        report_error: bool | None = Query(False, description="set to 'true' to return an error code if the stream is not found")):
     """
     Return two pieces information of the provided stream ID:
     
@@ -60,7 +60,7 @@ async def create_stream(
         sid: str = PARAM_STREAM_ID,
         desc: str | None = Query(None, description='A short description of the stream'),
         meta: str | None = Query('{}', description='A JSON string to store stream-wide information'),
-        override: bool | None = Query(False, desc="set to 'true' to replace the named stream with new parameters if exist"),
+        override: bool | None = Query(False, description="set to 'true' to replace the named stream with new parameters if exist"),
         max_len: int | None = None):
     """
     Create a new stream with the given ID and description. A stream
@@ -79,7 +79,7 @@ async def create_stream(
 @router.delete('/{stream_id}', summary='Delete a stream')
 async def delete_stream(
         sid: str = PARAM_STREAM_ID,
-        force: bool | None = Query(False, desc="set to 'true' to not report error if the stream does not exist.")):
+        force: bool | None = Query(False, description="set to 'true' to not report error if the stream does not exist.")):
     """
     Delete the given stream ID. After this operation, the stream can no
     longer receive and send data through the API.
