@@ -4,7 +4,7 @@ import aioredis
 import asyncio
 import json
 import os
-import starlette
+import starlette.datastructures
 
 class Context:
 
@@ -22,15 +22,7 @@ class Context:
             configFile = os.path.join(self.path, 'config.json')
         assert os.path.exists(configFile)
         self.config = defaultdict(lambda x: None, json.load(open(configFile, 'r')))
-        
         starlette.datastructures.UploadFile.spool_max_size = int(self.config.get('spool_max_size', 0))
-        tmpPath = self.config.get('tmp_path')
-        if tmpPath:
-            if not tmpPath.startswith('/'):
-                tmpPath = os.path.join(os.getcwd(), tmpPath)
-            tmpPath = os.path.normpath(tmpPath)
-            os.makedirs(tmpPath, exist_ok=True)
-            os.environ["TMPDIR"] = tmpPath
 
     def getDescription(self):
         readme = os.path.join(self.path, '..', 'README.md')
