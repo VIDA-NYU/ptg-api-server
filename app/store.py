@@ -70,19 +70,25 @@ class DataStore:
 class DataStream:
 
     @staticmethod
-    async def addEntries(sid: str, entries: list[bytes]):
+    async def addEntries(entries: list):
         maxlen = ctx.config['default_max_len']
         async with ctx.redis.pipeline() as pipe:
-            for entry in entries:
-                pipe = pipe.xadd(sid, {b'd':entry}, maxlen=maxlen, approximate=True)
+            for (sid,data) in entries:
+                pipe.xadd(sid, {b'd':data}, maxlen=maxlen, approximate=True)
             res = await pipe.execute()
         return res
 
     @staticmethod
-    async def getEntries(sid: str, count: int, last: str, block: int = None):
-        if last=='*':
-            entries = reversed(await ctx.redis.xrevrange(sid, count=count))
-        else:
-            streams = await ctx.redis.xread(streams={sid:last}, count=count, block=block)
-            entries = streams[0][1] if streams else []
+    async def getEntries(streams, count: int, block: int = None):
+        star = list(filter(lambda x: x[1]=='*', streams.items()))
+        nonstar = dict(filter(lambda x: x[1]!='*', streams.items()))
+        async with ctx.redis.pipeline() as pipe:
+            for (sid,last) in star:
+                pipe.xrevrange(sid, count=count)
+            if nonstar:
+                pipe.xread(streams=nonstar, count=count, block=block)
+            res = await pipe.execute()
+        entries = list(zip(map(lambda x: x[0], star), map(reversed, res)))
+        if nonstar and res[-1]:
+            entries += res[-1]
         return entries

@@ -21,13 +21,13 @@ Send data to a stream with the following query parameters:
 * **ack**: bool (default: `false`) - set to `true` if would like to server to respond to each entry/batch with inserted entry IDs
 
 If **batch** and **ack** are set to `false` (by default), the client only needs to send data (binary expected) one time step at a time, for example:
-```
+```python
 for entry in source:
   WebSocket.sendBinary(entry)
 ```
 
 When **batch** is set to `true`, the client must send to the server the the offsets of data entries in a comma comma separted list (e.g. `0,100,256,...`, then send the entire batch a single binary blob. The For example:
-```
+```python
 for batch in source:
   bytes = bytearray()
   offsets = []
@@ -39,7 +39,7 @@ for batch in source:
 ```
 
 When **ack** is set to `true`, the server will send a confirmation message back to the client (IDs associated with each entry in the data store). The client must receive the message before going to the next push. For example, a request to `/data/mystream/push?ack=true` can be handled as:
-```
+```python
 for entry in source:
   WebSocket.sendBinary(entry)
   entryIds = WebSocket.receiveText().split(',')
@@ -52,8 +52,8 @@ Retrieve data from a stream with the following query parameters:
 * **count**: int (default: `1`) - the maximum number of entries for each receive
 * **last_entry_id**: bool (default: `$`) - only retrieve entries laters than the provided (last entry) ID
 
-This endpoint assumes that data are always being sent in batches (even when **count** is set to `1`). The server socket will send back two messages: one JSON message describing the offsets of the batch `[[entry_id,offset],...]`; and one binary message for the actual entry data. A sample handler could be:
-```
+This endpoint assumes that data are always being sent in batches (even when **count** is set to `1`). The server socket will send back two messages: one JSON message describing the offsets of the batch `[[stream_id,entry_id,offset],...]`; and one binary message for the actual entry data. A sample handler could be:
+```python
 while True
   offsets = WebSocket.receiveText()
   bytes = WebSocket.receiveBinary()
@@ -69,7 +69,7 @@ These instructions are for setting up the server environment. You don't need to 
 The code requires Python 3.10+ and rely on [Redis](https://redis.io/), [FastAPI](https://fastapi.tiangolo.com/), [Uvcorn](https://www.uvicorn.org/), [Gunicorn](https://gunicorn.org/) to run the server. It is easiest to create a Python's virtual environment for the server using [Miniconda](https://docs.conda.io/en/latest/miniconda.html) since some of the packages requires binary executables installed (`pip` should work with some additional environment settings but be sure that you have Python 3.10+ first).
 
 ### Setup Miniconda/Conda environment
-```
+```bash
 cd ptg-api-server
 conda create --name ptg --file conda_requirements.txt
 ```
@@ -78,7 +78,7 @@ After that, we may `conda activate ptg` to run the services inside our new envir
 
 ### Start the Redis server
 We need to run the Redis server before starting our API service. Redis can be run as daemonize (in the background) or interactive. For the development environment, since the log files are not required to be stored, the preferred method is to use `screen` session to run Redis interactively so that we can track what's going with the server. For example:
-```
+```bash
 screen -S redis
 conda activate ptg
 cd ptg-api-server/redis
@@ -86,7 +86,7 @@ cd ptg-api-server/redis
 ```
 
 Alternatively, we can start Redis in daemonized mode (without screen):
-```
+```bash
 conda activate ptg
 cd ptg-api-server/redis
 ./start.sh --daemonize yes
@@ -96,7 +96,7 @@ Redis can be stopped by simply running the `stop.sh` script. This script only st
 
 ### Start the REST API server
 The following script starts the API service in interactive mode. 
-```
+```bash
 conda activate ptg
 cd ptg-api-server
 ./run.sh

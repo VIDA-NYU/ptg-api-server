@@ -30,17 +30,21 @@ print('DELETE /streams/dev0', r.content.decode('utf-8'))
 
 # #### DATA
 
-r = session.get(url=f'{PREFIX}/data/dev0', headers=headers, params={'count':1,'last_entry_id':'*'})
+r = session.get(url=f'{PREFIX}/data/test', headers=headers, params={'count':1,'last_entry_id':'*'})
 assert(r.ok)
-print('GET /data/dev0', r.headers.get('entry-offset'), len(r.content))
+print('GET /data/test', r.headers.get('entry-offset'), len(r.content))
 
 # filenames = ['file1.bin', 'file2.bin']
 # entries = [('entries', open(f,'rb').read()) for f in filenames]
-# r = session.post(url=f'{PREFIX}/data/dev0', headers=headers, files=entries)
+# r = session.post(url=f'{PREFIX}/data/test', headers=headers, files=entries)
 # assert(r.ok)
-# print('POST /data/dev0', r.content.decode('utf-8'))
+# print('POST /data/test', r.content.decode('utf-8'))
 
 r = session.get(url=f'{PREFIX}/data/dev0', headers=headers, params={'count':2,'last_entry_id':'*'})
 assert(r.ok)
 print('GET /data/dev0', r.headers.get('entry-offset'), len(r.content))
+
+r = session.get(url=f'{PREFIX}/data/test+dev0', headers=headers, params={'count':2,'last_entry_id':'1650789155046-0+*'})
+assert(r.ok)
+print('GET /data/test+dev0', r.headers.get('entry-offset'), len(r.content))
 

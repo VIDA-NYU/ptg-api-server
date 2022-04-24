@@ -9,5 +9,7 @@
         },
         "meta_key": "ptg-dev"
     },
+    "spool_max_size": 0,
+    "tmp_path": "tmp",
     "default_max_len": 1000
 }
