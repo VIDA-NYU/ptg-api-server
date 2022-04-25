@@ -2,12 +2,13 @@ import asyncio
 import io
 import itertools
 import orjson
+import re
 from fastapi import APIRouter, Depends, Query, Path, HTTPException, File, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from websockets.exceptions import ConnectionClosed
 from app.auth import UserAuth
 from app.store import DataStream
-from app.utils import get_tag_names, pack_entries
+from app.utils import get_tag_names, unzip_entries
 
 tags = [
     {
@@ -69,12 +70,12 @@ async def get_data_entries(
     the all streams (e.g. just `$`).
 
     """
-    streams = dict(zip(sid.split('+'),itertools.cycle(last_entry_id.split('+'))))
+    streams = dict(zip(sid.split('+'),itertools.cycle(re.split('\\+| ', last_entry_id))))
     try:
         entries = await DataStream.getEntries(streams, count)
     except Exception as err:
         raise HTTPException(status_code=400, detail=str(err))
-    offsets, content = pack_entries(entries)
+    offsets, content = unzip_entries(entries)
     return StreamingResponse(io.BytesIO(content),
                              headers={'entry-offset': offsets},
                              media_type='application/octet-stream')
@@ -121,14 +122,17 @@ async def pull_data_ws(
         return
     await ws.accept()
     try:
-        last = last_entry_id
+        last = dict(zip(sid.split('+'),itertools.cycle(re.split('\\+| ', last_entry_id))))
         while True:
-            entries = await DataStream.getEntries({sid:last}, count, block=10000)
+            entries = await DataStream.getEntries(last, count, block=10000)
             if entries:
-                offsets, content = pack_entries(entries)
+                offsets, content = unzip_entries(entries)
                 await ws.send_text(offsets)
                 await ws.send_bytes(content)
-                last = entries[-1][0]
+                for sid,data in entries:
+                    sid = sid.decode('utf-8') if isinstance(sid, bytes) else sid
+                    last[sid] = data[-1][0]
+
     except (WebSocketDisconnect, ConnectionClosed):
         pass
         

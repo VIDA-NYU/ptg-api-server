@@ -14,10 +14,10 @@ token = r.json()['access_token']
 headers = {'Authorization': f'Bearer {token}'}
 
 async def start():
-    async with websockets.connect(f'ws://{ADDRESS}/data/dev0/pull', extra_headers=headers) as websocket:
+    async with websockets.connect(f'ws://{ADDRESS}/data/test+dev0/pull?last_entry_id=1650811721065-1+*', extra_headers=headers) as websocket:
         while True:
             offsets = orjson.loads(await websocket.recv())
             content = await websocket.recv()
-            print(offsets, content)
+            print(offsets, len(content))
 
 asyncio.run(start())

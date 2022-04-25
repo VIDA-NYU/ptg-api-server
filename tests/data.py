@@ -44,6 +44,6 @@ r = session.get(url=f'{PREFIX}/data/dev0', headers=headers, params={'count':2,'l
 assert(r.ok)
 print('GET /data/dev0', r.headers.get('entry-offset'), len(r.content))
 
-r = session.get(url=f'{PREFIX}/data/test+dev0', headers=headers, params={'count':2,'last_entry_id':'1650811721065-1+*'})
+r = session.get(url=f'{PREFIX}/data/test+dev0?count=2&last_entry_id=1650811721065-1+*', headers=headers)
 assert(r.ok)
 print('GET /data/test+dev0', r.headers.get('entry-offset'), len(r.content))

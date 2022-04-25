@@ -4,11 +4,11 @@ import orjson
 def get_tag_names(tags):
     return list(map(lambda x: x['name'], tags))
 
-def pack_entries(entries):
+def unzip_entries(entries):
     offsets = []
     content = bytearray()
     for sid,data in entries:
-        sid = sid.decode('utf-8') if type(sid)==bytes else sid
+        sid = sid.decode('utf-8') if isinstance(sid, bytes) else sid
         for d in data:
             offsets.append((sid,d[0].decode('utf-8'),len(content)))
             content += d[1][b'd']

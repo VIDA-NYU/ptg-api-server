@@ -1,3 +1,4 @@
+import asyncio
 import orjson
 from collections import defaultdict
 from typing import Awaitable
@@ -83,12 +84,18 @@ class DataStream:
         star = list(filter(lambda x: x[1]=='*', streams.items()))
         nonstar = dict(filter(lambda x: x[1]!='*', streams.items()))
         async with ctx.redis.pipeline() as pipe:
-            for (sid,last) in star:
-                pipe.xrevrange(sid, count=count)
+            async def noop():
+                return []
+            calls = [None, None]
+            if star:
+                for (sid,last) in star:
+                    pipe.xrevrange(sid, count=count)
+                calls[0] = pipe.execute()
             if nonstar:
-                pipe.xread(streams=nonstar, count=count, block=block)
-            res = await pipe.execute()
-        entries = list(zip(map(lambda x: x[0], star), map(reversed, res)))
-        if nonstar and res[-1]:
-            entries += res[-1]
+                calls[1] = ctx.redis.xread(streams=nonstar, count=count, block=block)
+            calls = map(lambda x: x or noop(), calls)
+            res = await asyncio.gather(*calls)
+        entries = list(zip(map(lambda x: x[0], star), map(sorted, res[0])))
+        if nonstar and res[1]:
+            entries += res[1]
         return entries
