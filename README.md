@@ -16,7 +16,7 @@ In additional the endpoints presented on the OpenAPI portal, there are also two 
 
 ### **WebSocket** **`/data/{stream_id}/push`**
 Send data to a stream with the following query parameters:
-* **stream_id**: string (required) - the unique ID of the stream
+* **stream_id**: string (required) - the unique ID of the stream, or **`*`** to push data to multiple streams (implying **batch** is `true`).
 * **batch**: bool (default: `false`) - set to `true` if entries will be sent in batches (in an alternate text and bytes format, more below)
 * **ack**: bool (default: `false`) - set to `true` if would like to server to respond to each entry/batch with inserted entry IDs
 
@@ -26,17 +26,20 @@ for entry in source:
   WebSocket.sendBinary(entry)
 ```
 
-When **batch** is set to `true`, the client must send to the server the the offsets of data entries in a comma comma separted list (e.g. `0,100,256,...`, then send the entire batch a single binary blob. The For example:
+When **batch** is set to `true` or **stream_id** is `*`, the client must send to the server the correspond stream ID and offset of each data entry in the batch as a JSON list of list (e.g. `[["stream0", 0],["stream2",100],["stream0",256],...[`, then send the entire batch a single binary blob. For example:
 ```python
+# for sending multiple streams and/or in batches
 for batch in source:
   bytes = bytearray()
-  offsets = []
+  entries = []
   for entry in batch:
-    offsets += len(bytes)
+    entries.append((streamname,len(bytes)))
     bytes += entry
-  WebSocket.sendText(','.join(offsets))
+  WebSocket.sendText(json.dumps(entries))
   WebSocket.sendBinary(bytes)
 ```
+
+If **batch** is set to `true` but **stream_id** is not `*`, stream information of the batch entry header will be ignored (always push to the specify stream).
 
 When **ack** is set to `true`, the server will send a confirmation message back to the client (IDs associated with each entry in the data store). The client must receive the message before going to the next push. For example, a request to `/data/mystream/push?ack=true` can be handled as:
 ```python
@@ -48,19 +51,19 @@ for entry in source:
 
 ### **WebSocket** **`/data/{stream_id}/pull`**
 Retrieve data from a stream with the following query parameters:
-* **stream_id**: string (required) - the unique ID of the stream
+* **stream_id**: string (required) - the unique ID of the streams, separated by `+`
 * **count**: int (default: `1`) - the maximum number of entries for each receive
 * **last_entry_id**: bool (default: `$`) - only retrieve entries laters than the provided (last entry) ID
 
 This endpoint assumes that data are always being sent in batches (even when **count** is set to `1`). The server socket will send back two messages: one JSON message describing the offsets of the batch `[[stream_id,entry_id,offset],...]`; and one binary message for the actual entry data. A sample handler could be:
 ```python
 while True
-  offsets = WebSocket.receiveText()
+  entries = json.loads(WebSocket.receiveText())
   bytes = WebSocket.receiveBinary()
-  numEntries = len(offsets.split(','))
+  numEntries = len(entries)
 ```
 
-This is a blocking call, if there's no entry matched the condition (no later then **last_entry_id**), the server will wait until it's available.
+This is a blocking call, if there's no entry matched the condition (no later than **last_entry_id**), the server will wait until it's available.
 
 ## Setup Instructions
 
