@@ -27,18 +27,18 @@ class Session:
 
     @staticmethod
     async def getProcedureInfo(uid: str):
-        pid,index = await ctx.redisClient.mget(f'{uid}:procedure:id',
-                                               f'{uid}:procedure:index')
+        pid, index = await ctx.redisClient.mget(
+            f'{uid}:procedure:id', f'{uid}:procedure:index')
         pid = pid.decode('utf-8')
         index = int(index or '0')
         steps = PROCEDURES.get(pid, [])
-        return pid,index,steps
+        return pid, index, steps
 
     @staticmethod
-    def setProcedureIndex(uid: str, index: int) -> Awaitable:
-        return ctx.redisClient.set(f'{uid}:procedure:index', index)
+    async def setProcedureIndex(uid: str, index: int):
+        return await ctx.redisClient.set(f'{uid}:procedure:index', index)
     
     @staticmethod
-    def setProcedureInfo(uid: str, pid: int, index: int) -> Awaitable:
-        return ctx.redisClient.mset({f'{uid}:procedure:id': pid,
-                                     f'{uid}:procedure:index': index})
+    async def setProcedureInfo(uid: str, pid: int, index: int):
+        return await ctx.redisClient.mset({
+            f'{uid}:procedure:id': pid, f'{uid}:procedure:index': index})
