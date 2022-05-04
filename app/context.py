@@ -1,7 +1,7 @@
 from collections import defaultdict
 from functools import cache
-import aioredis
 import asyncio
+from redis import asyncio as aioredis
 import json
 import os
 
@@ -12,7 +12,7 @@ class Context:
     def instance():
         return Context()
 
-    def __init__(self, configFile: str|None=None):
+    def __init__(self, configFile: str | None=None):
         self.redis = None
         self.redisClient = None # Redis connection for client-side support
         self.path = os.path.dirname(__file__)
@@ -30,6 +30,9 @@ class Context:
 
     async def initialize(self):
         connection = self.config['redis']['connection']
+        url = os.getenv('REDIS_URL')
+        if url:
+            connection['url'] = url
         self.redis = await aioredis.from_url(**connection)
         self.redisClient = await aioredis.from_url(**connection, db=1)
         await asyncio.gather(self.redis.ping(),self.redisClient.ping())
