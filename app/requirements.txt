@@ -1,0 +1,13 @@
+fastapi[all]
+uvicorn[standard]
+gunicorn
+websockets==10.1
+fire
+numpy
+opencv-python>=4.0.1.23
+Pillow
+redis>=4.2.2
+jinja2
+python-jose
+orjson
+celery
