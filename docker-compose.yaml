@@ -11,16 +11,38 @@ services:
       HLS_URL: hls:1935
     depends_on:
       - redis
-      - mongo
+      # - mongo
+    restart: unless-stopped
+
+  
+  yolo_main:
+    build: ./app
+    command: ['ml.py', 'yolo5', 'main']
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+  yolo_webcam:
+    build: ./app
+    command: ['ml.py', 'yolo5', 'webcam:pv', '--is-jpg']
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
     restart: unless-stopped
 
   redis:
-    build: ./redis
+    image: redis:7
     restart: unless-stopped
     ports:
       - 6379:6379
     expose:
      - '6379'
+    volumes:
+      - ./redis/redis_6789.conf:/usr/local/etc/redis/redis.conf
+    environment:
+      ALLOW_EMPTY_PASSWORD: 'yes'
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       interval: 1s
@@ -92,20 +114,20 @@ services:
 
   # storing recipes
 
-  mongo:
-    image: mongo
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: something
-      MONGO_INITDB_ROOT_PASSWORD: coffee
-      MONGO_INITDB_DATABASE: recipes
+  # mongo:
+  #   image: mongo
+  #   restart: unless-stopped
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: something
+  #     MONGO_INITDB_ROOT_PASSWORD: coffee
+  #     MONGO_INITDB_DATABASE: recipes
 
-  mongo-express:
-    image: mongo-express
-    restart: unless-stopped
-    ports:
-      - 8081:8081
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: something
-      ME_CONFIG_MONGODB_ADMINPASSWORD: coffee
-      ME_CONFIG_MONGODB_URL: mongodb://something:coffee@mongo:27017/
+  # mongo-express:
+  #   image: mongo-express
+  #   restart: unless-stopped
+  #   ports:
+  #     - 8081:8081
+  #   environment:
+  #     ME_CONFIG_MONGODB_ADMINUSERNAME: something
+  #     ME_CONFIG_MONGODB_ADMINPASSWORD: coffee
+  #     ME_CONFIG_MONGODB_URL: mongodb://something:coffee@mongo:27017/
