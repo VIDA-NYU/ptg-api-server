@@ -4,6 +4,7 @@ import asyncio
 from redis import asyncio as aioredis
 import json
 import os
+import starlette.datastructures
 
 class Context:
 
@@ -15,11 +16,13 @@ class Context:
     def __init__(self, configFile: str | None=None):
         self.redis = None
         self.redisClient = None # Redis connection for client-side support
+
         self.path = os.path.dirname(__file__)
         if not configFile:
             configFile = os.path.join(self.path, 'config.json')
         assert os.path.exists(configFile)
         self.config = defaultdict(lambda x: None, json.load(open(configFile, 'r')))
+        starlette.datastructures.UploadFile.spool_max_size = int(self.config.get('spool_max_size', 0))
 
     def getDescription(self):
         readme = os.path.join(self.path, '..', 'README.md')
