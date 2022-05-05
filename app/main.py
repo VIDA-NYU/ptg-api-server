@@ -1,9 +1,3 @@
-# add up one directory to path
-import os
-import sys
-sys.path.insert(0, os.path.abspath(f'{__file__}/../..'))
-print(sys.path)
-
 from fastapi import FastAPI, APIRouter, Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.context import Context

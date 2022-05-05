@@ -6,10 +6,13 @@ RUN apt-get update -qyy && \
     && pip install --upgrade pip \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /src/app
 ADD requirements.txt .
 RUN pip install -r requirements.txt && rm -rf ~/.cache/pip /var/cache/apt/
+RUN pip install -r https://raw.githubusercontent.com/ultralytics/yolov5/master/requirements.txt  # install yolo dependencies
 
-ADD . /app
-ENTRYPOINT [ "python", "-m" ]
-CMD [ "gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000" ]
+ENV PYTHONPATH "${PYTHONPATH}:/src"
+
+ADD . /src/app
+ENTRYPOINT [ "python" ]
+CMD [ "-m", "gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000" ]
