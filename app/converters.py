@@ -75,11 +75,8 @@ class CompressedImage(DataModel):
     '''Convert images to and from bytes.'''
     format: str = 'jpg'
 
-    def load(self, data: bytes, width: int, height: int) -> np.ndarray:
-        im = np.array(pil.frombytes(self.format, (width, height), data))
-        if self.rotate:
-            im = np.rot90(im, self.rotate)
-        return im
+    def load(self, data: bytes) -> np.ndarray:
+        return np.array(pil.open(io.BytesIO(data)))
 
     def dump(self, im: np.ndarray):
         output = io.BytesIO()
