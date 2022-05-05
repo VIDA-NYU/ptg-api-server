@@ -30,7 +30,7 @@ async def stream_async(sid='webcam:pv', last='$', timeout=10000):
         #     output = io.BytesIO()
         #     Image.fromarray(im).save(output, format='jpeg')
         #     frame = output.getvalue()
-        sys.stdin.write(frame)
+        sys.stdout.write(frame)
 
 def stream(*a, **kw): return asyncio.run(stream_async(*a, **kw))
 
