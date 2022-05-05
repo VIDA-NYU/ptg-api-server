@@ -36,6 +36,8 @@ def redis_id_to_iso(rid):
 
 
 class DataModel(pydantic.BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     def __init__(self, *a, **kw):
         super().__init__(**dict(zip(self.__fields__, a)), **kw)
 

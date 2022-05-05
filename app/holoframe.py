@@ -5,14 +5,14 @@ from collections import namedtuple
 import cv2
 from PIL import Image
 import numpy as np
-from .utils import BaseModel
+from .utils import DataModel
 
 SensorTypeCls = namedtuple(
     'SensorType', 'PV DepthLT DepthAHAT GLL GLF GRF GRR Accel Gyro Mag numSensor Calibration')
 SensorType = SensorTypeCls(*range(len(SensorTypeCls._fields)))
 
 
-class SensorData(BaseModel):
+class SensorData(DataModel):
     frame_type: int
     accel: np.ndarray
     gyro: np.ndarray

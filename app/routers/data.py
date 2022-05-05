@@ -22,6 +22,20 @@ router = APIRouter(prefix='/data', tags=get_tag_names(tags),
 PARAM_STREAM_ID = Path(None, alias='stream_id',
                        description='The unique ID of the stream')
 
+
+
+# @router.post('/hololens-generic', summary='Send data to a stream')
+# async def send_any_hololens_entries(
+#         sid: str=PARAM_STREAM_ID, 
+#         entries: list[bytes] | None=PARAM_ENTRIES):
+#     raise NotImplementedError
+#     parsed = [holoframe.load(x) for x in entries]
+#     # TODO: create a dictionary of lists grouped by stream_id - IMPORTANT need to group by frame ID - maybe just change hololens parser idk.
+#     return await asyncio.gather(
+#         DataStream.addEntries(f'{sid}:{name.lower()}', entries)
+#         for name, entries in parsed.items())
+
+
 @router.post('/{stream_id}', summary='Send data to one or multiple streams')
 async def send_data_entries(
         sid: str = PARAM_STREAM_ID,
