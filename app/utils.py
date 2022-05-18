@@ -1,7 +1,20 @@
+from typing import Optional
 import functools
 import datetime
 import orjson
 import pydantic
+
+
+def prints_traceback(func):
+    @functools.wraps(func)
+    def inner(*a, **kw):
+        try:
+            return func(*a, **kw)
+        except BaseException:
+            import traceback
+            traceback.print_exc()
+            raise
+    return inner
 
 
 def parse_stream_id(stream_id):
@@ -40,6 +53,18 @@ class DataModel(pydantic.BaseModel):
         arbitrary_types_allowed = True
     def __init__(self, *a, **kw):
         super().__init__(**dict(zip(self.__fields__, a)), **kw)
+
+
+class AllOptional(pydantic.main.ModelMetaclass):
+    def __new__(self, name, bases, namespaces, **kwargs):
+        annotations = namespaces.get('__annotations__', {})
+        for base in bases:
+            annotations.update(base.__annotations__)
+        for field in annotations:
+            if not field.startswith('__'):
+                annotations[field] = Optional[annotations[field]]
+        namespaces['__annotations__'] = annotations
+        return super().__new__(self, name, bases, namespaces, **kwargs)
 
 
 

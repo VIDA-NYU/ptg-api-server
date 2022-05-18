@@ -3,6 +3,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+.DS_Store
+
+# hidden trash folders
+shh/
+shhh/
+shhhh/
+
+# app data
+
+
+
 # C extensions
 *.so
 

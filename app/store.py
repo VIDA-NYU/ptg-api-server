@@ -3,6 +3,7 @@ import orjson
 from collections import defaultdict
 from typing import Awaitable
 from app.context import Context
+from app.utils import redis_id_to_iso
 
 ctx = Context.instance()
 
@@ -15,7 +16,7 @@ class DataStore:
         return await store.load()
 
     @staticmethod
-    async def getStreamInfo(sid: str):
+    async def getStreamInfo(sid: str, parse_first_last_entry: bool=True):
         key = ctx.config['redis']['meta_key']
         async with ctx.redis.pipeline() as pipe:
             meta, info = (
@@ -25,6 +26,11 @@ class DataStore:
         meta = (str(meta) if isinstance(meta, Exception) else
                 (orjson.loads(meta)['streams'].get(sid, {}) if meta else {}))
         info = str(info) if isinstance(info, Exception) else info
+        if parse_first_last_entry and isinstance(info, dict):
+            if info['first-entry']:
+                info['first-entry'] = redis_id_to_iso(info['first-entry'][0])
+            if info['last-entry']:
+                info['last-entry'] = redis_id_to_iso(info['last-entry'][0])
         return meta, info
 
     def __init__(self, redisKey: str):
@@ -45,7 +51,6 @@ class DataStore:
     async def getStreamIds(self):
         keys = await ctx.redis.keys()
         return [k for k in keys if k.decode('utf-8') != self.redisKey]
-        # return list(filter(lambda x: x.decode('utf-8')!=self.redisKey, keys))
 
     def hasStreamId(self, sid: str) -> bool:
         return sid in self.meta['streams']

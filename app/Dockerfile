@@ -9,7 +9,7 @@ RUN apt-get update -qyy && \
 WORKDIR /src/app
 ADD requirements.txt .
 RUN pip install -r requirements.txt && rm -rf ~/.cache/pip /var/cache/apt/
-RUN pip install -r https://raw.githubusercontent.com/ultralytics/yolov5/master/requirements.txt  # install yolo dependencies
+# RUN pip install -r https://raw.githubusercontent.com/ultralytics/yolov5/master/requirements.txt  # install yolo dependencies
 
 ENV PYTHONPATH "${PYTHONPATH}:/src"
 

@@ -1,0 +1,38 @@
+apiVersion: 1
+
+providers:
+  - name: Redis Stats
+    type: url
+    updateIntervalSeconds: 60
+    options:
+      gnetId: 763
+      inputs:
+        DS_PROM: prometheus
+  - name: Mongo Stats
+    type: url
+    updateIntervalSeconds: 60
+    options:
+      gnetId: 2583
+      inputs:
+        DS_PROMETHEUS: prometheus
+  - name: Node Stats
+    type: url
+    updateIntervalSeconds: 60
+    options:
+      gnetId: 1860
+      inputs:
+        DS_PROMETHEUS: prometheus
+  - name: Redis Streams
+    type: url
+    updateIntervalSeconds: 60
+    options:
+      gnetId: 12980
+      inputs:
+        DS_REDIS: redis
+
+# RUN cd /var/lib/grafana/dashboards && \
+#     curl -o redis-exporter.json https://grafana.com/api/dashboards/763/revisions/latest/download && \
+#     curl -o mongo-exporter.json https://grafana.com/api/dashboards/2583/revisions/latest/download && \
+#     curl -o node-exporter.json https://grafana.com/api/dashboards/1860/revisions/latest/download && \
+#     curl -o redis-stream.json https://grafana.com/api/dashboards/12980/revisions/latest/download && \
+#     echo 'downloaded dbs :)'

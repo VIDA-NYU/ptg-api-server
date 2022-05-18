@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 from fastapi import APIRouter, Depends, HTTPException, status as STATUS
 from fastapi.security import OAuth2PasswordRequestForm
 from app.auth import Token, UserAuth
@@ -28,3 +29,7 @@ async def authenticate(form_data: OAuth2PasswordRequestForm = Depends()):
 @router.get('/ping', summary='Seng a ping to health-check the data store')
 async def ping_redis():
     return (await ctx.redis.ping())
+
+@router.get('/ping/error', summary='Seng a ping to test exception handling')
+async def ping_error():
+    raise ValueError("This is an error purposefully thrown by the server")

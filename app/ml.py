@@ -93,13 +93,7 @@ async def reader(src_id, batch_size=1, is_jpg=False, block=10000, last='-', no_d
     parse = parse_jpg if is_jpg else parse_holo_im
 
     while True:
-        # [[stream_name, [[ts, data], ...]], ...]
-        # streams = await redis.xread(
-        #     streams={src_id: last}, 
-        #     count=batch_size, block=block)
         streams = await redis.xrevrange(src_id, count=batch_size, min=last)#f'{last})' if last else '-'
-        # print(streams)
-        # streams = streams[0][1] if streams else None
         if not streams or streams[-1][0] == last:
             print('no data', flush=True)
             await asyncio.sleep(no_data_sleep)

@@ -1,4 +1,4 @@
-fastapi[all]
+fastapi[all]>=0.75.2
 uvicorn[standard]
 gunicorn
 websockets==10.1
@@ -11,4 +11,6 @@ jinja2
 python-jose
 orjson
 celery
-torch
+# torch
+starlette_exporter
+motor

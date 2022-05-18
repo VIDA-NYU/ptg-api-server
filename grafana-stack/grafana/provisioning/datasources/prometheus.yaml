@@ -1,0 +1,43 @@
+apiVersion: 1
+
+datasources:
+
+  - name: prometheus
+    access: proxy
+    type: prometheus
+    url: http://prometheus:9090
+    isDefault: true
+    orgId: 1
+    editable: false
+    jsonData:
+      timeInterval: 10s
+
+  - name: loki
+    access: proxy
+    type: loki
+    url: http://loki:3100
+    isDefault: false
+    database: ''
+    user: ''
+    password: ''
+    basicAuth: false
+    id: 1
+    orgId: 1
+    readOnly: false
+    jsonData:
+      keepCookies: []
+    typeLogoUrl: public/app/plugins/datasource/loki/img/loki_icon.svg
+
+  - name: redis
+    access: proxy
+    type: redis-datasource
+    url: redis:6379
+    isDefault: false
+    orgId: 1
+
+  # - name: mongodb
+  #   access: proxy
+  #   type: mongodb-datasource
+  #   url: mongodb:27017
+  #   isDefault: false
+  #   orgId: 1

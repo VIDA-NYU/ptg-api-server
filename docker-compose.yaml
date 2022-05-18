@@ -1,5 +1,14 @@
 version: '3'
+
+x-loki-logging: &lokilogging
+  driver: json-file
+  options:
+    tag: "{{.Name}}"
+
 services:
+
+  # The API
+
   app:
     build: ./app
     ports:
@@ -8,37 +17,39 @@ services:
      - './app:/app'
     environment:
       REDIS_URL: redis://redis:6379
-      HLS_URL: hls:1935
+      # HLS_URL: hls:1935
+      MONGO_URL: mongodb://mongo:27017
     depends_on:
       - redis
-      # - mongo
+      - mongo
     restart: unless-stopped
+    logging: *lokilogging
 
-  
-  yolo_main:
-    build: ./app
-    command: ['ml.py', 'yolo5', 'main']
-    environment:
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      - redis
-    restart: unless-stopped
-  yolo_webcam:
-    build: ./app
-    command: ['ml.py', 'yolo5', 'webcam:pv', '--is-jpg']
-    environment:
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      - redis
-    restart: unless-stopped
+  # Machine Learning for Streams
+
+  # yolo_main:
+  #   build: ./app
+  #   command: ['ml.py', 'yolo5', 'main']
+  #   environment:
+  #     REDIS_URL: redis://redis:6379
+  #   depends_on:
+  #     - redis
+  #   restart: unless-stopped
+  # yolo_webcam:
+  #   build: ./app
+  #   command: ['ml.py', 'yolo5', 'webcam:pv', '--is-jpg']
+  #   environment:
+  #     REDIS_URL: redis://redis:6379
+  #   depends_on:
+  #     - redis
+  #   restart: unless-stopped
+
+
+  # Data Storage
 
   redis:
     image: redis:7
     restart: unless-stopped
-    ports:
-      - 6379:6379
-    expose:
-     - '6379'
     volumes:
       - ./redis/redis_6789.conf:/usr/local/etc/redis/redis.conf
     environment:
@@ -48,6 +59,7 @@ services:
       interval: 1s
       timeout: 3s
       retries: 5
+    logging: *lokilogging
 
   # a dashboard to view redis
   redisinsight:
@@ -74,8 +86,7 @@ services:
     restart: unless-stopped
     ports:
       - 1936:1935
-
-  
+    logging: *lokilogging
 
   # background task management
 
@@ -114,20 +125,101 @@ services:
 
   # storing recipes
 
-  # mongo:
-  #   image: mongo
-  #   restart: unless-stopped
-  #   environment:
-  #     MONGO_INITDB_ROOT_USERNAME: something
-  #     MONGO_INITDB_ROOT_PASSWORD: coffee
-  #     MONGO_INITDB_DATABASE: recipes
+  mongo:
+    build: ./mongo
+    # image: mongo
+    restart: unless-stopped
+    # environment:
+    #   MONGO_INITDB_DATABASE: app
+    logging: *lokilogging
+  mongo-express:
+    image: mongo-express
+    restart: unless-stopped
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/
 
-  # mongo-express:
-  #   image: mongo-express
+
+
+
+  # Error tracking 
+  # https://dev.to/ruanbekker/setup-glitchtip-error-monitoring-on-docker-358
+
+  
+  loki:
+    image: grafana/loki:master
+    # volumes:
+    #   - ./grafana-stack/loki/config.yaml:/etc/loki/config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+
+  promtail:
+    image: grafana/promtail:master
+    depends_on:
+        - loki
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers
+      - /var/log:/var/log
+      - ./grafana-stack/promtail/config.yaml:/etc/promtail/config.yaml
+    command: -config.file=/etc/promtail/config.yaml
+
+  prometheus:
+    image: prom/prometheus:v2.7.1
+    ports:
+        - "9090:9090"
+    volumes:
+        - ./grafana-stack/prometheus/config.yaml:/etc/prometheus/config.yaml
+    command: >-
+        --config.file=/etc/prometheus/config.yaml
+        --storage.tsdb.path=/prometheus
+        --web.console.libraries=/usr/share/prometheus/console_libraries
+        --web.console.templates=/usr/share/prometheus/consoles
+
+  grafana:
+    build: ./grafana-stack/grafana
+    depends_on:
+        - loki
+    ports:
+        - "3000:3000"
+    environment:
+        GF_SECURITY_ADMIN_USER: admin
+        GF_SECURITY_ADMIN_PASSWORD: test
+
+  cadvisor:
+    image: google/cadvisor:v0.33.0
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  redis-exporter:
+    image: bitnami/redis-exporter:latest
+    restart: unless-stopped
+    depends_on:
+        - redis
+    environment:
+      REDIS_ADDR: redis://redis:6379
+
+  # mongo-exporter:
+  #   image: bitnami/mongodb-exporter:latest
+  #   command: --mongodb.uri=mongodb://mongo:27017
   #   restart: unless-stopped
-  #   ports:
-  #     - 8081:8081
+  #   depends_on:
+  #       - mongo
   #   environment:
-  #     ME_CONFIG_MONGODB_ADMINUSERNAME: something
-  #     ME_CONFIG_MONGODB_ADMINPASSWORD: coffee
-  #     ME_CONFIG_MONGODB_URL: mongodb://something:coffee@mongo:27017/
+  #     MONGODB_URL: mongodb://mongo:27017

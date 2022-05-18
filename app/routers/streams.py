@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from app.auth import UserAuth
 from app.store import DataStore
@@ -16,15 +17,21 @@ router = APIRouter(prefix='/streams',
 PARAM_STREAM_ID = Path(None, alias='stream_id', description='The unique ID of the stream')
 
 @router.get('/', summary="Get available streams")
-async def get_stream_ids():
+async def get_stream_ids(info: bool | None = Query(False, description="set to 'true' to return stream metadata as well")):
     """
     Get the list of stream IDs available for sending and receiving
     data. These streams must have been created by the 'PUT' end-point
     and/or added directly by the data back-end (e.g. Redis) manually.
     """
     store = await DataStore.get()
-    streamIds = await store.getStreamIds()
-    return streamIds
+    if info:
+        streams = []
+        for sid in await store.getStreamIds():
+            sid = sid.decode('utf-8')
+            meta, info = await DataStore.getStreamInfo(sid)
+            streams.append({'sid': sid, 'meta': meta, 'info': info})
+        return streams
+    return await store.getStreamIds()
 
 @router.get('/{stream_id}', summary='Get information of a stream')
 async def get_stream_info(
@@ -44,14 +51,8 @@ async def get_stream_info(
     error status code (400) is desired, set **report_error** to true.
     """
     meta, info = await DataStore.getStreamInfo(sid)
-    if type(info)==dict:
-        if info['first-entry']:
-            info['first-entry'] = redis_id_to_iso(info['first-entry'][0])
-        if info['last-entry']:
-            info['last-entry'] = redis_id_to_iso(info['last-entry'][0])
     response = {'meta': meta, 'info': info}
-    isError = type(meta)==str or type(info)==str
-    if report_error and isError:
+    if report_error and (isinstance(meta, str) or isinstance(info, str)):
         raise HTTPException(status_code=400, detail=response)
     return response
 

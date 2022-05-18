@@ -8,7 +8,8 @@ from fastapi.responses import StreamingResponse
 from websockets.exceptions import ConnectionClosed
 from app.auth import UserAuth
 from app.store import DataStream
-from app.utils import get_tag_names, unzip_entries
+from app.utils import get_tag_names, unzip_entries, prints_traceback
+from app import holoframe
 
 tags = [
     {
@@ -21,19 +22,6 @@ router = APIRouter(prefix='/data', tags=get_tag_names(tags),
 
 PARAM_STREAM_ID = Path(None, alias='stream_id',
                        description='The unique ID of the stream')
-
-
-
-# @router.post('/hololens-generic', summary='Send data to a stream')
-# async def send_any_hololens_entries(
-#         sid: str=PARAM_STREAM_ID, 
-#         entries: list[bytes] | None=PARAM_ENTRIES):
-#     raise NotImplementedError
-#     parsed = [holoframe.load(x) for x in entries]
-#     # TODO: create a dictionary of lists grouped by stream_id - IMPORTANT need to group by frame ID - maybe just change hololens parser idk.
-#     return await asyncio.gather(
-#         DataStream.addEntries(f'{sid}:{name.lower()}', entries)
-#         for name, entries in parsed.items())
 
 
 @router.post('/{stream_id}', summary='Send data to one or multiple streams')
@@ -94,7 +82,7 @@ async def get_data_entries(
                              headers={'entry-offset': offsets},
                              media_type='application/octet-stream')
 
-@router.websocket(router.prefix + '/{stream_id}/push')
+@router.websocket('/{stream_id}/push')
 async def push_data_ws(
         ws: WebSocket,
         sid: str = PARAM_STREAM_ID,
@@ -124,7 +112,7 @@ async def push_data_ws(
         pass
 
 
-@router.websocket(router.prefix + '/{stream_id}/pull')
+@router.websocket('/{stream_id}/pull')
 async def pull_data_ws(
         ws: WebSocket,
         sid: str = PARAM_STREAM_ID,
@@ -150,3 +138,13 @@ async def pull_data_ws(
     except (WebSocketDisconnect, ConnectionClosed):
         pass
         
+
+@router.post('/hololens', summary='Send data to a stream')
+async def send_any_hololens_entries(
+        entries: list[UploadFile] | None = File(..., description='A list of data entries (as multiform files) to be added into the stream(s).')):
+    res = await DataStream.addEntries([
+        (sid, d)
+        for e in entries
+        for sid, d in holoframe.load_streams(e)
+    ])
+    return res
