@@ -12,7 +12,7 @@ To access:
  - API `localhost:7890` [docs](http://localhost:7890/docs)
  - HLS Video Streaming Server (WIP) `http://localhost:8089`, `rtmp://localhost:1935`
  - [Grafana Dashboards](http://localhost:3000)
- - [Mongo Express Dashboard](http://localhost:8035)
+ - [Mongo Express Dashboard](http://localhost:8081)
 
 
 ## Overview
