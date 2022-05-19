@@ -1,5 +1,22 @@
 # PTG Data Store API
 
+## Getting started
+
+To bring up the server on your local machine, do:
+
+```bash
+docker-compose up -d --build
+```
+
+To access:
+ - API `localhost:7890` [docs](http://localhost:7890/docs)
+ - HLS Video Streaming Server (WIP) `http://localhost:8089`, `rtmp://localhost:1935`
+ - [Grafana Dashboards](http://localhost:3000)
+ - [Mongo Express Dashboard](http://localhost:8035)
+
+
+## Overview
+
 REST + Web Socket API to interact with the data store. The endpoints are secured by bearer tokens, so one need to authenticate and obtain a token (through the `/token` endpoint) before accessing them. Currently, for development purposes, any **username** and **password** of the same value (e.g. *test:test*, or *user:user*) will be accepted by `/token`. If you're in a hurry, use the following token:
 
 ```
