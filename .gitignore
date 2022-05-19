@@ -12,7 +12,7 @@ shhhh/
 
 # app data
 
-
+app_data/
 
 # C extensions
 *.so

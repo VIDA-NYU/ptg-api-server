@@ -31,6 +31,14 @@ scrape_configs:
     static_configs:
     - targets: ['mongo-exporter:9216']
 
+  # - job_name: "nginx"
+  #   static_configs:
+  #   - targets: ['nginx-exporter:']
+
+  - job_name: "nginx-rtmp"
+    static_configs:
+    - targets: ['nginx-rtmp-exporter:9728']
+
   - job_name: "api"
     static_configs:
     - targets: ['app:7890']
