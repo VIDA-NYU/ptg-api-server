@@ -189,6 +189,7 @@ services:
     environment:
         GF_SECURITY_ADMIN_USER: admin
         GF_SECURITY_ADMIN_PASSWORD: test
+        GF_FORCE_MIGRATION: 'true'
 
   cadvisor:
     image: google/cadvisor:v0.33.0
@@ -239,6 +240,6 @@ services:
   nginx-rtmp-exporter:
     image: vtimofei/nginx_rtmp_prometheus:v0.2.1
     restart: unless-stopped
-    command: --nginxrtmp.scrape-uri="http://hls:8080/stat"
+    command: --nginxrtmp.scrape-uri="http://hls/stat"
     depends_on:
         - hls
