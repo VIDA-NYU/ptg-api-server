@@ -139,12 +139,3 @@ async def pull_data_ws(
         pass
         
 
-@router.post('/hololens', summary='Send data to a stream')
-async def send_any_hololens_entries(
-        entries: list[UploadFile] | None = File(..., description='A list of data entries (as multiform files) to be added into the stream(s).')):
-    res = await DataStream.addEntries([
-        (sid, d)
-        for e in entries
-        for sid, d in holoframe.load_streams(e)
-    ])
-    return res
