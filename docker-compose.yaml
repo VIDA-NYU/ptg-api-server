@@ -11,10 +11,12 @@ services:
 
   app:
     build: ./app
+    expose: 
+      - "8000"
     ports:
-      - 7890:8000
-    volumes:
-     - './app:/app'
+     - 7890:8000
+    #volumes:
+    # - './app:/app'
     environment:
       REDIS_URL: redis://redis:6379
       # HLS_URL: hls:1935
@@ -24,6 +26,13 @@ services:
       - mongo
     restart: unless-stopped
     logging: *lokilogging
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=le"
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
 
   # Machine Learning for Streams
 
@@ -50,8 +59,10 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
+    ports:
+      - 6379:6379
     volumes:
-      - ./redis/redis_6789.conf:/usr/local/etc/redis/redis.conf
+      - ${VOLUMES}/redis/redis_6789.conf:/usr/local/etc/redis/redis.conf
     environment:
       ALLOW_EMPTY_PASSWORD: 'yes'
     healthcheck:
@@ -84,12 +95,25 @@ services:
   hls:
     build: ./hls
     restart: unless-stopped
+    networks:
+      - web
+      - default
     ports:
-      - 1935:1935
-      - 8089:80
+     - 1935:1935
+     - 8089:80
+    expose:
+      - "80"
+      - "1935"
     volumes:
       - ./app_data/hls:/tmp/hls
     logging: *lokilogging
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hls.rule=Host(`hls.${DOMAIN}`)"
+      - "traefik.http.routers.hls.entrypoints=websecure"
+      - "traefik.http.routers.hls.tls.certresolver=le"
+      - "traefik.http.routers.hls.tls=true"
+      - "traefik.http.services.hls.loadbalancer.server.port=80"
 
   # background task management
 
@@ -184,20 +208,36 @@ services:
         - loki
     volumes:
       - ./grafana-stack/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - web
+      - default
     ports:
-        - "3000:3000"
+      - "3000:3000"
+    expose:
+      - "3000"
     environment:
-        GF_SECURITY_ADMIN_USER: admin
-        GF_SECURITY_ADMIN_PASSWORD: test
+        GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+        GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS}
+        #GF_SERVER_ROOT_URL: http://grafana:3000
+        GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=le"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
   cadvisor:
-    image: google/cadvisor:v0.33.0
+    #image: google/cadvisor:v0.33.0
+    image: gcr.io/cadvisor/cadvisor
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
+        #- /dev/disk/:/dev/disk:ro
+
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -242,3 +282,9 @@ services:
     command: --nginxrtmp.scrape-uri="http://hls:8080/stat"
     depends_on:
         - hls
+
+
+networks:
+  web:
+    external: true
+    name: web
