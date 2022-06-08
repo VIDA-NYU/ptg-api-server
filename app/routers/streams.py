@@ -1,8 +1,12 @@
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Body
 from app.auth import UserAuth
-from app.store import DataStore
+# from app.store import DataStore
+from app.streams import Streams
 from app.utils import get_tag_names, redis_id_to_iso
+
+
+STREAM_STORE = Streams()
 
 tags = [
     {
@@ -23,15 +27,10 @@ async def get_stream_ids(info: bool | None = Query(False, description="set to 't
     data. These streams must have been created by the 'PUT' end-point
     and/or added directly by the data back-end (e.g. Redis) manually.
     """
-    store = await DataStore.get()
     if info:
-        streams = []
-        for sid in await store.getStreamIds():
-            sid = sid.decode('utf-8')
-            meta, info = await DataStore.getStreamInfo(sid)
-            streams.append({'sid': sid, 'meta': meta, 'info': info})
-        return streams
-    return await store.getStreamIds()
+        return await STREAM_STORE.list_stream_info()
+    return await STREAM_STORE.list_streams()
+    
 
 @router.get('/{stream_id}', summary='Get information of a stream')
 async def get_stream_info(
@@ -50,19 +49,17 @@ async def get_stream_info(
     and the error message(s) will be returned in the response. If an
     error status code (400) is desired, set **report_error** to true.
     """
-    meta, info = await DataStore.getStreamInfo(sid)
-    response = {'meta': meta, 'info': info}
-    if report_error and (isinstance(meta, str) or isinstance(info, str)):
-        raise HTTPException(status_code=400, detail=response)
-    return response
+    info = await STREAM_STORE.get_stream_info(sid)
+    if report_error and 'error' in info:
+        raise HTTPException(status_code=400, detail=info['error'])
+    return info
 
-@router.put('/{stream_id}', summary='Create or reset a stream')
-async def create_stream(
+@router.put('/{stream_id}', summary='Update a streams metadata')
+async def update_stream(
         sid: str = PARAM_STREAM_ID,
-        desc: str | None = Query(None, description='A short description of the stream'),
-        meta: str | None = Query('{}', description='A JSON string to store stream-wide information'),
-        override: bool | None = Query(False, description="set to 'true' to replace the named stream with new parameters if exist"),
-        max_len: int | None = None):
+        # desc: str | None = Query(None, description='A short description of the stream'),
+        meta: dict = Body(..., description='arbitrary metadata to store with the stream'),
+        override: bool | None = Query(False, description="set to 'true' to replace the named stream with new parameters if exist")):
     """
     Create a new stream with the given ID and description. A stream
     must be created before data can be sent and received. Use
@@ -70,23 +67,12 @@ async def create_stream(
     returning an error. By default, `max_len` is set to the parameter
     in the `config.json` file, but can be overriden here.
     """
-    store = await DataStore.get()
-    if store.hasStreamId(sid) and not override:
-        raise HTTPException(status_code=400,
-                            detail=f"The stream '{sid}' already exists and 'override' is not specified.")
-    await store.createStream(sid, desc=desc, meta=meta, max_len=max_len)
-    return store.getStream(sid)
+    await STREAM_STORE.set_stream_meta(sid, _update=not override, **meta)
+    return await STREAM_STORE.get_stream_meta(sid)
 
 @router.delete('/{stream_id}', summary='Delete a stream')
-async def delete_stream(
-        sid: str = PARAM_STREAM_ID,
-        force: bool | None = Query(False, description="set to 'true' to not report error if the stream does not exist.")):
-    """
-    Delete the given stream ID. After this operation, the stream can no
+async def delete_stream(sid: str = PARAM_STREAM_ID):
+    """Delete the given stream ID. After this operation, the stream can no
     longer receive and send data through the API.
     """
-    store = await DataStore.get()
-    if not store.hasStreamId(sid) and not force:
-        raise HTTPException(status_code=400,
-                            detail=f"The requested stream '{sid}' does not exist.")
-    return (await store.deleteStream(sid))
+    return await STREAM_STORE.delete_stream(sid)

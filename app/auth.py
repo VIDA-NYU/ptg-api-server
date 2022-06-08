@@ -58,7 +58,7 @@ class UserAuth:
             headers={"WWW-Authenticate": "Bearer"},
         )
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={'verify_exp': False})
             username: str = payload.get("sub")
             if username is None:
                 raise tokenError

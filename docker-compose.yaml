@@ -220,6 +220,7 @@ services:
         GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS}
         #GF_SERVER_ROOT_URL: http://grafana:3000
         GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+        GF_FORCE_MIGRATION: 'true'
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
@@ -279,7 +280,7 @@ services:
   nginx-rtmp-exporter:
     image: vtimofei/nginx_rtmp_prometheus:v0.2.1
     restart: unless-stopped
-    command: --nginxrtmp.scrape-uri="http://hls:8080/stat"
+    command: --nginxrtmp.scrape-uri="http://hls/stat"
     depends_on:
         - hls
 

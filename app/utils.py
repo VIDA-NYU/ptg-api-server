@@ -48,6 +48,25 @@ def redis_id_to_iso(rid):
     return datetime.datetime.fromtimestamp(int(rid.split(b'-')[0])/1000).isoformat(sep=' ')
 
 
+
+
+def parse_ts(tid):
+    '''Convert a redis timestamp to a datetime object.'''
+    return datetime.datetime.fromtimestamp(parse_epoch_time(tid))
+
+def parse_epoch_ts(tid):
+    '''Convert a redis timestamp to epoch seconds.'''
+    return int(tid.split('-')[0])/1000
+
+def format_ts(dt: datetime.datetime):
+    return format_epoch_time(dt.timestamp())
+
+def format_epoch_ts(tid: float):
+    return f'{int(tid * 1000)}-0'
+
+
+
+
 class DataModel(pydantic.BaseModel):
     class Config:
         arbitrary_types_allowed = True
