@@ -15,7 +15,8 @@ services:
       - "8000"
     ports:
      - 7890:8000
-    #volumes:
+    volumes:
+      - ${VOLUMES}/recordings:/data/recordings
     # - './app:/app'
     environment:
       REDIS_URL: redis://redis:6379
@@ -33,6 +34,17 @@ services:
       - "traefik.http.routers.api.tls.certresolver=le"
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.services.api.loadbalancer.server.port=8000"
+
+  recorder:
+    build: ./recorder
+    volumes:
+     - ${VOLUMES}/recordings:/src/app/data
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+    logging: *lokilogging
 
   # Machine Learning for Streams
 

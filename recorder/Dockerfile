@@ -7,8 +7,8 @@ RUN pip install -r requirements.txt && rm -rf ~/.cache/pip /var/cache/apt/
 
 ENV PYTHONPATH "${PYTHONPATH}:/src"
 
-ADD ptgctl ptgctl
-RUN pip install -e ./ptgctl
+#ADD ptgctl ptgctl
+#RUN pip install -e ./ptgctl
 
 ADD main.py /src/app/main.py
 

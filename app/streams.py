@@ -8,24 +8,27 @@ from app.utils import redis_id_to_iso
 ctx = Context.instance()
 
 
-def _postprocess_stream_info(info, meta):
+def _postprocess_stream_info(info, meta, sid):
+    d = {'sid': sid}
     if isinstance(info, Exception):
         info = {'error': str(info)}
-    info = info or {}
+    d.update(info or {})
 
-    if info.get('first-entry'):
-        info['first-entry-time'] = redis_id_to_iso(info['first-entry'][0])
-    if info.get('last-entry'):
-        info['last-entry-time'] = redis_id_to_iso(info['last-entry'][0])
+    if d.get('first-entry'):
+        d['first-entry'] = ts = d['first-entry'][0]
+        d['first-entry-time'] = redis_id_to_iso(ts)
+    if d.get('last-entry'):
+        d['last-entry'] = ts = d['last-entry'][0]
+        d['last-entry-time'] = redis_id_to_iso(ts)
 
-    info['meta'] = str(meta) if isinstance(info, Exception) else meta
-    return info
+    d['meta'] = str(meta) if isinstance(info, Exception) else meta
+    return d
 
 class Streams:
     META_PREFIX = 'XMETA'
     MAXLEN = ctx.config['default_max_len']
     async def list_streams(self):
-        return [x.decode('utf-8') for x in await ctx.redis.scan_iter(_type='stream')]
+        return [x.decode('utf-8') async for x in ctx.redis.scan_iter(_type='stream')]
 
     async def list_stream_info(self, sids=None):
         if sids is None:
@@ -33,14 +36,15 @@ class Streams:
         async with ctx.redis.pipeline() as pipe:
             for sid in sids:
                 pipe.get(f'{self.META_PREFIX}:{sid}').xinfo_stream(sid)
+            res = await pipe.execute(raise_on_error=False)
             info = [
-                _postprocess_stream_info(info, meta)
-                for meta, info in await pipe.execute(raise_on_error=False)
+                _postprocess_stream_info(info, meta, sid)
+                for sid, meta, info in zip(sids, res[::2], res[1::2])
             ]
         return info
 
     async def get_stream_info(self, sid):
-        return await self.list_stream_info([sid])[0]
+        return (await self.list_stream_info([sid]))[0]
 
     async def get_stream_meta(self, sid):
         return await ctx.redis.get(f'{self.META_PREFIX}:{sid}')
@@ -51,7 +55,7 @@ class Streams:
             previous = await ctx.redis.get(key)
             if previous:
                 meta = dict(orjson.loads(previous), **meta)
-        return await ctx.redis.get(key, orjson.dumps(meta))
+        return await ctx.redis.set(key, orjson.dumps(meta))
 
     async def trim_stream(self, sid, maxlen=None, minid=None, **kw):
         return await ctx.redis.xtrim(sid, maxlen=maxlen, minid=minid, **kw)
