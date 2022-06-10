@@ -21,31 +21,38 @@ router = APIRouter(prefix='/recipes', tags=get_tag_names(tags),
                    dependencies=[Depends(UserAuth.require_authorization)])
 
 
-class RecipeStepSchema(BaseModel):
-    text: str = Field(description='The recipe step text')
-    verb: str = Field(description='The action verb')
-    noun: str = Field(description='The action noun')
-    relevant_objects: List[str] = Field(description='The relevant objects')
+# class RecipeIngredientSchema(BaseModel):
+#     name: str = Field(description='The ingredient name')
+
+# class RecipeToolSchema(BaseModel):
+#     name: str = Field(description='The ingredient tool')
+
+# class RecipeInstructionsSchema(BaseModel):
+#     name: str = Field(description='The ingredient instructions')
 
 class RecipeSchema(BaseModel):
-    id: str = Field(None, description='The recipe id')
-    title: str = Field(description='The recipe title')
-    desc: str = Field(None, description='The recipe title')
-    text: str = Field(None, description='The recipe text')
-    steps: Optional[List[RecipeStepSchema]] = Field([], description='The list of steps')
+    name: str = Field(None, description='The recipe name')
+    ingredients: List[str] = Field(None, description='The recipe ingredients')
+    tools: List[str] = Field(None, description='The recipe tools')
+    instructions: List[str] = Field(None, description='The recipe instructions')
+    # id: str = Field(None, description='The recipe id')
+    # title: str = Field(description='The recipe title')
+    # desc: str = Field(None, description='The recipe title')
+    # text: str = Field(None, description='The recipe text')
+    # steps: Optional[List[RecipeStepSchema]] = Field([], description='The list of steps')
 
-    class Config:
-        schema_extra = {
-            "example": {
-                'id': 'grilled_cheese',
-                'title': 'Grilled Cheese',
-                'steps': [
-                    {'text': 'place bread on place', 'verb': 'place', 'noun': 'bread'},
-                    {'text': 'place cheese on bread', 'verb': 'place', 'noun': 'cheese'},
-                    {'text': 'make the rest of the sandwich'},
-                ],
-            }
-        }
+    # class Config:
+    #     schema_extra = {
+    #         "example": {
+    #             'id': 'grilled_cheese',
+    #             'title': 'Grilled Cheese',
+    #             'steps': [
+    #                 {'text': 'place bread on place', 'verb': 'place', 'noun': 'bread'},
+    #                 {'text': 'place cheese on bread', 'verb': 'place', 'noun': 'cheese'},
+    #                 {'text': 'make the rest of the sandwich'},
+    #             ],
+    #         }
+    #     }
 
 class PartialRecipeSchema(RecipeSchema, metaclass=AllOptional):
     pass
