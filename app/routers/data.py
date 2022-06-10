@@ -8,9 +8,10 @@ from fastapi.responses import StreamingResponse
 from websockets.exceptions import ConnectionClosed
 from app.auth import UserAuth
 # from app.store import DataStream
-from app.streams import Streams
+from app.core.streams import Streams
 from app.utils import get_tag_names, unzip_entries, prints_traceback
-from app import holoframe, utils
+from app import utils
+from app.core import holoframe
 
 STREAM_STORE = Streams()
 

@@ -2,7 +2,7 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Body
 from app.auth import UserAuth
 # from app.store import DataStore
-from app.streams import Streams
+from app.core.streams import Streams
 from app.utils import get_tag_names, redis_id_to_iso
 
 
