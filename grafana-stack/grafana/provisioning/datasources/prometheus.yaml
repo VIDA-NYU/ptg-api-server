@@ -35,9 +35,13 @@ datasources:
     isDefault: false
     orgId: 1
 
-  # - name: mongodb
-  #   access: proxy
-  #   type: mongodb-datasource
-  #   url: mongodb:27017
-  #   isDefault: false
-  #   orgId: 1
+  - name: mongodb
+    access: proxy
+    type: jamesosgood-grafana-mongodb-datasource
+    url: http://localhost:3333
+    #url: mongodb://mongodb:27017
+    isDefault: false
+    orgId: 1
+    jsonData:
+      mongodb_url: mongodb://mongo:27017
+      mongodb_db: app

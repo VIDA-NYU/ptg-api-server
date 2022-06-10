@@ -74,8 +74,8 @@ def _zip(entries):
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_STORED, False) as zf:
         for ts, data in entries:
             zf.writestr(ts, data)
-    date = parse_time(entries[0][0]).strftime('%Y-%m-%d')
-    fn = f'{date}/{entries[0][0]}_{entries[-1][0]}.zip'
+    #date = parse_time(entries[0][0]).strftime('%Y-%m-%d')
+    fn = f'{entries[0][0]}_{entries[-1][0]}.zip'
     return fn, archive.getvalue()
 
 
@@ -98,8 +98,8 @@ MB = 1024 * 1024
 
 
 class Recorder:
-    def __init__(self, batches, url=None, recording_id_key='recording:id'):
-        self.url = url or os.getenv('REDIS_URL')
+    def __init__(self, batches=None, url=None, recording_id_key='recording:id'):
+        self.url = url or os.getenv('REDIS_URL') or 'redis://localhost:6379'
         self.recording_id_key = recording_id_key
         self.batches = batches
 
@@ -107,17 +107,19 @@ class Recorder:
         self.redis = await aioredis.from_url(self.url)
 
     async def stream_ids(self):
-        return [x.decode('utf-8') for x in await self.redis.scan_iter(_type='stream')]
+        return [x.decode('utf-8') async for x in self.redis.scan_iter(_type='stream')]
 
     async def get_id(self):
-        return await self.redis.get(self.recording_id_key)
+        rec_id = await self.redis.get(self.recording_id_key)
+        return rec_id.decode('utf-8') if rec_id else rec_id
 
     async def start_recording(self, rec_id=None):
         rec_id = rec_id or str(int(time.time() * 1000))
         await self.redis.set(self.recording_id_key, rec_id)
+        return rec_id
 
     async def stop_recording(self):
-        await self.redis.set(self.recording_id_key, None)
+        return await self.redis.delete(self.recording_id_key)
 
     async def wait_for_recording_id(self, initial_id=None, delay=1):
         while True:
@@ -128,34 +130,41 @@ class Recorder:
 
     async def run(self):
         while True:
-            # wait for a recording ID
-            rec_id = await self.wait_for_recording_id()
-            batches = self.batches or [await self.stream_ids()]
-            # batches = self.batches or [[sid] for sid in await self.stream_ids()]
-            await asyncio.gather(
-                # continually check the recording ID, while its still the same
-                self.wait_for_recording_id(rec_id),
-                # record batches while 
-                *(self.record_async(rec_id, *sids) for sids in batches))
+            try:
+                print('waiting for recording')
+                # wait for a recording ID
+                rec_id = await self.wait_for_recording_id()
+                batches = self.batches or [await self.stream_ids()]
+                # batches = self.batches or [[sid] for sid in await self.stream_ids()]
+                await asyncio.gather(
+                    # continually check the recording ID, while its still the same
+                    self.wait_for_recording_id(rec_id),
+                    # record batches while 
+                    *(self.record_async(rec_id, *sids) for sids in batches))
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                await asyncio.sleep(5)
 
     async def record_async(self, rec_id, *sids, max_size=9.5 * MB, max_len=1000, batch_size=16, block=20000, last='$'):
+        print('starting recording', rec_id)
         redis = self.redis
 
         drive = get_writer('disk', rec_id or '')
         acc = Batches({s: last for s in sids}, max_len, max_size)
-        # watch that the recording ID is still the same
-        while self.rec_id and self.rec_id == rec_id:
-            # get the next batch of streams
-            streams = await redis.xread(streams=acc.last, count=batch_size, block=block)
-            # add entries to stream batches
-            acc.update(streams)
-            # as they finish, they will emit entries here
-            for sid, entries in acc.finished():
-                drive.store(entries, sid)
-
-
-    async def stream_ids(self):
-        return [k for k in await self.redis.keys() if k.decode('utf-8') != self.redisKey]
+        try:
+            # watch that the recording ID is still the same
+            while self.rec_id and self.rec_id == rec_id:
+                # get the next batch of streams
+                streams = await redis.xread(streams=acc.last, count=batch_size, block=block)
+                # add entries to stream batches
+                acc.update(streams)
+                # as they finish, they will emit entries here
+                for sid, entries in acc.finished():
+                    drive.store(entries, sid)
+        finally:
+            acc.close()
+            print('done recording', rec_id)
 
 
 
@@ -170,14 +179,17 @@ class Batches:
 
     def update(self, streams):
         for sid, entries in streams:
-            if sid not in entries:
+            sid = sid.decode('utf-8')
+            if sid not in self.entries:
                 self.size[sid] = 0
                 self.entries[sid] = []
-                self.pbars[sid] = tqdm.tqdm(total=self.max_len)
+                self.pbars[sid] = tqdm.tqdm(total=self.max_len, desc=sid)
+
             self.size[sid] += sum(len(x[b'd']) for _, x in entries)
-            self.entries[sid].extend(entries)
-            self.last[sid] = entries[-1][0]
+            self.entries[sid].extend((ts.decode('utf-8'), x[b'd']) for ts, x in entries)
+            self.last[sid] = last = entries[-1][0]
             self.pbars[sid].update(len(entries))
+            self.pbars[sid].set_description(f'{sid} {last} {datetime.datetime.now() - parse_time(last.decode("utf-8"))}')
 
     def is_done(self, sid):
         return len(self.entries[sid]) >= self.max_len or self.size[sid] >= self.max_size
@@ -185,12 +197,17 @@ class Batches:
     def finished(self):
         for sid, entries in self.entries.items():
             if self.is_done(sid):
-                yield entries
+                yield sid, entries
                 self.size[sid] = 0
                 self.entries[sid] = []
                 self.pbars[sid].reset()
 
-
+    def close(self):
+        for sid, pbar in self.pbars.items():
+            pbar.close()
+        self.pbars = {}
+        self.entries = {}
+        self.size = {}
 
 
 
@@ -213,13 +230,13 @@ async def run():
 async def start():
     rec = Recorder()
     await rec.connect()
-    await rec.start_recording()
+    print(await rec.start_recording())
 
 @async_wrap
 async def stop():
     rec = Recorder()
     await rec.connect()
-    await rec.stop_recording()
+    print(await rec.stop_recording())
 
 
 if __name__ == '__main__':

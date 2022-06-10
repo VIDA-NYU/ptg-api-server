@@ -4,10 +4,10 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette_exporter import PrometheusMiddleware, handle_metrics
 from app.context import Context
-from app.routers import data, misc, streams, recipes, session
+from app.routers import data, misc, streams, recipes, session, recording
 
 ctx = Context.instance()
-routers = [misc, streams, data, recipes, session]
+routers = [misc, streams, data, recipes, session, recording]
 tags = sum(map(lambda x: x.tags, routers), [])
 
 app = FastAPI(title=ctx.config['title'],

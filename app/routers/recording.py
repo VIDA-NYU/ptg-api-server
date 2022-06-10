@@ -1,11 +1,14 @@
-import io
+import os
+import glob
+
 import orjson
 from fastapi import APIRouter, Depends, Query, Path, HTTPException, File, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
-from websockets.exceptions import ConnectionClosed
 from app.auth import UserAuth
-# from app.store import DataStream
-from app.utils import get_tag_names, pack_entries
+from app.recordings import Recordings
+from app.utils import get_tag_names
+
+RECORDINGS = Recordings()
 
 
 tags = [
@@ -20,20 +23,22 @@ router = APIRouter(prefix='/recordings', tags=get_tag_names(tags),
 
 PARAM_RECORDING_ID = Path(description='The ID of the recording.')
 
-@router.post('/', summary='List recordings')
-async def list_recordings():
-    return 
+@router.get('/', summary='List recordings')
+async def list_recordings(info: bool | None = Query(False, description="set to 'true' to return recording metadata as well")):
+    if info:
+        return RECORDINGS.list_recording_info()
+    return RECORDINGS.list_recordings()
 
-@router.post('/{recording_id}', summary='Get recording info')
+@router.get('/{recording_id}', summary='Get recording info')
 async def get_recording_info(recording_id: str = PARAM_RECORDING_ID):
-    return 
+    return RECORDINGS.get_recording_info(recording_id)
 
 
 
-@router.post('/start', summary='Start recording data')
-async def record_streams_start():
-    return 
+@router.put('/start', summary='Start recording data')
+async def record_streams_start(rec_id: str | None = Query(None, description="specify a recording ID (optional)")):
+    return await RECORDINGS.start(rec_id)
 
-@router.post('/stop', summary='Stop recording data')
+@router.put('/stop', summary='Stop recording data')
 async def record_streams_stop():
-    return 
+    return await RECORDINGS.stop()
