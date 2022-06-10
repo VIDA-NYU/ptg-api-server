@@ -11,6 +11,7 @@ services:
 
   app:
     build: ./app
+    container_name: api
     expose: 
       - "8000"
     ports:
@@ -73,8 +74,8 @@ services:
     restart: unless-stopped
     ports:
       - 6379:6379
-    volumes:
-      - ${VOLUMES}/redis/redis_6789.conf:/usr/local/etc/redis/redis.conf
+    #volumes:
+    #  - ./redis/redis_6789.conf:/usr/local/etc/redis/redis.conf
     environment:
       ALLOW_EMPTY_PASSWORD: 'yes'
     healthcheck:
@@ -168,6 +169,8 @@ services:
     build: ./mongo
     # image: mongo
     restart: unless-stopped
+    volumes:
+      - ${VOLUMES}/mongo:/data/db
     # environment:
     #   MONGO_INITDB_DATABASE: app
     logging: *lokilogging
@@ -188,7 +191,9 @@ services:
   
   loki:
     image: grafana/loki:master
-    # volumes:
+    volumes:
+      - /data/volumes/loki:/data/loki
+      #- ${VOLUMES}:/loki
     #   - ./grafana-stack/loki/config.yaml:/etc/loki/config.yaml
     command: -config.file=/etc/loki/local-config.yaml
 
@@ -207,7 +212,8 @@ services:
     ports:
         - "9090:9090"
     volumes:
-        - ./grafana-stack/prometheus/config.yaml:/etc/prometheus/config.yaml
+      - ${VOLUMES}/prometheus:/prometheus/data
+      - ./grafana-stack/prometheus/config.yaml:/etc/prometheus/config.yaml
     command: >-
         --config.file=/etc/prometheus/config.yaml
         --storage.tsdb.path=/prometheus
