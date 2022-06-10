@@ -33,9 +33,10 @@ class Streams:
         async with ctx.redis.pipeline() as pipe:
             for sid in sids:
                 pipe.get(f'{self.META_PREFIX}:{sid}').xinfo_stream(sid)
+            res = await pipe.execute(raise_on_error=False)
             info = [
                 _postprocess_stream_info(info, meta)
-                for meta, info in await pipe.execute(raise_on_error=False)
+                for meta, info in zip(res[::2], res[1::2])
             ]
         return info
 

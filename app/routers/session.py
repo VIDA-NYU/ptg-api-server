@@ -12,7 +12,7 @@ from fastapi.encoders import jsonable_encoder
 from app.auth import UserAuth
 from app.session import Session
 from app.utils import get_tag_names, AllOptional
-from app.mongo import DB
+from app.core.mongo import DB
 
 session_db = DB('sessions')
 
