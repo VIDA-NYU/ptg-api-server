@@ -1,3 +1,4 @@
+from __future__ import annotations
 import datetime
 from fastapi import Depends, FastAPI, HTTPException, status as STATUS
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -22,7 +23,7 @@ class User(BaseModel):
 
 class UserAuth:
 
-    def __init__(self, username: str | None = None, password: str | None = None):
+    def __init__(self):
         self.user = None
 
     def authenticate(self, username: str, password: str):
@@ -34,6 +35,8 @@ class UserAuth:
         return True
 
     def createToken(self):
+        if not self.user:
+            raise RuntimeError("Not logged in")
         exp = datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         token = {
             'sub': self.user.username,

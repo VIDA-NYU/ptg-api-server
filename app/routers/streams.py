@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Body
 from app.auth import UserAuth

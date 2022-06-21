@@ -4,9 +4,12 @@ import time
 import datetime
 import zipfile
 from app import utils
+from app.context import Context
 
 RECORDING_PATH = os.getenv("RECORDING_PATH") or '/data/recordings'
 
+
+ctx = Context.instance()
 
 fglob = lambda *fs: glob.glob(os.path.join(*fs))
 
@@ -45,8 +48,8 @@ class Recordings:
         }
 
     def first_last_times(self, firsts=None, lasts=None):
-        first = min((t for t in firsts if t), default=None)
-        last = max((t for t in lasts if t), default=None)
+        first = min((t for t in firsts or () if t), default=None)
+        last = max((t for t in lasts or () if t), default=None)
         return {
             "duration": str(datetime.timedelta(seconds=utils.parse_epoch_ts(last) - utils.parse_epoch_ts(first))) if first and last else None,
             "first-entry": first,
@@ -61,11 +64,11 @@ class Recordings:
 
     async def start(self, rec_id=None):
         rec_id = rec_id or self.create_recording_id()
-        await self.redis.set(self.recording_id_key, rec_id)
+        await ctx.redis.set(self.recording_id_key, rec_id)
         return rec_id
 
     async def stop(self):
-        return await self.redis.delete(self.recording_id_key)
+        return await ctx.redis.delete(self.recording_id_key)
 
 
 # class Recordings:
