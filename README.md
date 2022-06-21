@@ -5,7 +5,16 @@
 To bring up the server on your local machine, do:
 
 ```bash
-docker-compose up -d --build
+make services
+```
+
+You can access services using localhost.
+
+
+To bring up a full server with https reverse proxy, do:
+
+```bash
+make full
 ```
 
 To access:
@@ -14,6 +23,12 @@ To access:
  - [Grafana Dashboards](http://localhost:3000)
  - [Mongo Express Dashboard](http://localhost:8081)
 
+
+To update and run the latest API changes, do:
+```bash
+make pull  # optional: pull latest changes
+make services
+```
 
 ## Overview
 

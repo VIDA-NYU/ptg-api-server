@@ -1,0 +1,3 @@
+[submodule "ptgctl"]
+	path = ptgctl
+	url = git@github.com:VIDA-NYU/ptgctl.git
