@@ -163,6 +163,8 @@ class Recorder:
                 for sid, entries in acc.finished():
                     drive.store(entries, sid)
         finally:
+            for sid, entries in acc.entries.items():
+                drive.store(entries, sid)
             acc.close()
             print('done recording', rec_id)
 
