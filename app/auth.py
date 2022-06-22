@@ -1,24 +1,23 @@
-from __future__ import annotations
+#from __future__ import annotations
+from typing import Optional
 import datetime
-from fastapi import Depends, FastAPI, HTTPException, status as STATUS
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import Depends, Request, HTTPException, status as STATUS
+from fastapi.security import OAuth2PasswordBearer #, OAuth2PasswordRequestForm
+from fastapi.security.utils import get_authorization_scheme_param
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from app.context import Context
 
-from fastapi.exceptions import HTTPException
-from fastapi.security.utils import get_authorization_scheme_param
-from starlette.requests import Request
-from starlette.status import HTTP_401_UNAUTHORIZED
+#from starlette.requests import Request as StarletteRequest
 
 class OAuth2PasswordBearerCookie(OAuth2PasswordBearer):
-    async def __call__(self, request: Request) -> str|None:
+    async def __call__(self, request: Request) -> Optional[str]:
         authorization: str = request.headers.get("Authorization") or request.cookies.get("authorization")
         scheme, param = get_authorization_scheme_param(authorization)
         if not authorization or scheme.lower() != "bearer":
             if self.auto_error:
                 raise HTTPException(
-                    status_code=HTTP_401_UNAUTHORIZED,
+                    status_code=STATUS.HTTP_401_UNAUTHORIZED,
                     detail="Not authenticated",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
