@@ -1,9 +1,7 @@
 import os
 import glob
-import time
 import datetime
-import zipfile
-from app import utils
+from app.core.utils import parse_epoch_ts, parse_ts
 from app.context import Context
 
 RECORDING_PATH = os.getenv("RECORDING_PATH") or '/data/recordings'
@@ -51,11 +49,11 @@ class Recordings:
         first = min((t for t in firsts or () if t), default=None)
         last = max((t for t in lasts or () if t), default=None)
         return {
-            "duration": str(datetime.timedelta(seconds=utils.parse_epoch_ts(last) - utils.parse_epoch_ts(first))) if first and last else None,
+            "duration": str(datetime.timedelta(seconds=parse_epoch_ts(last) - parse_epoch_ts(first))) if first and last else None,
             "first-entry": first,
             "last-entry": last,
-            "first-entry-time": utils.parse_ts(first).strftime("%c") if first else None,
-            "last-entry-time": utils.parse_ts(last).strftime("%c") if last else None,
+            "first-entry-time": parse_ts(first).strftime("%c") if first else None,
+            "last-entry-time": parse_ts(last).strftime("%c") if last else None,
         }
 
     def create_recording_id(self):

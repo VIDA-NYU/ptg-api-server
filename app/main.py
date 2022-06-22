@@ -1,5 +1,5 @@
 import patch  # fastapi fixes
-from fastapi import FastAPI, APIRouter, Response
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette_exporter import PrometheusMiddleware, handle_metrics
@@ -8,7 +8,7 @@ from app.routers import data, misc, streams, recipes, session, recording
 
 ctx = Context.instance()
 routers = [misc, streams, data, recipes, session, recording]
-tags = sum(map(lambda x: x.tags, routers), [])
+tags = [t for r in routers for t in r.tags]
 
 app = FastAPI(title=ctx.config['title'],
               description=ctx.getDescription(),

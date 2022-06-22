@@ -9,9 +9,9 @@ from websockets.exceptions import ConnectionClosed
 from app.auth import UserAuth
 # from app.store import DataStream
 from app.core.streams import Streams
-from app.utils import get_tag_names, unzip_entries, prints_traceback
+from app.utils import get_tag_names, pack_entries
 from app import utils
-from app.core import holoframe
+from app.core import holoframe, converters
 
 STREAM_STORE = Streams()
 
@@ -24,9 +24,11 @@ tags = [
 router = APIRouter(prefix='/data', tags=get_tag_names(tags),
                    dependencies=[Depends(UserAuth.require_authorization)])
 
-PARAM_STREAM_ID = Path(None, alias='stream_id',
-                       description='The unique ID of the stream')
-
+PARAM_STREAM_ID = Path(None, alias='stream_id', description='The unique ID of the stream')
+PARAM_LAST_ENTRY_ID = Query('$', description="Start retrieving entries later than the provided ID")
+PARAM_COUNT = Query(1, description="the maximum number of entries for each receive")
+PARAM_INPUT = Query(None, description="The entry input format. If not provided, the format will be guessed.")
+PARAM_OUTPUT = Query(None, description="The entry output format. Use this if you want to convert to a different format - e.g. jpg, png, json.")
 PARAM_PARSE_META = Query(False, description='Try to parse frame as a hololens format to get the timestamp.')
 
 
@@ -42,22 +44,20 @@ async def send_data_entries(
     stream ids.
 
     """
-    streams = [x.filename.split('/') for x in entries] if sid == '*' else [sid] * len(entries)
+    sids = [x.filename.split('/') for x in entries] if sid == '*' else [sid] * len(entries)
     data = await asyncio.gather(*(x.read() for x in entries))
-    
-    if parse_meta:
-        metas = [holoframe.load(d) for d in data]
-        ts = [d.get('time') for d in metas]
-    else:
-        ts = [None] * len(data)
-    return await STREAM_STORE.add_entries(zip(streams, ts, data))
+    ts = get_ts(data, parse_meta)
+
+    return await STREAM_STORE.add_entries(zip(sids, ts, data))
 
 
 @router.get('/{stream_id}', summary='Retrieve data from one or multiple streams', response_class=StreamingResponse)
 async def get_data_entries(
         sid: str = PARAM_STREAM_ID,
-        last_entry_id: str | None = Query('*', description="Only retrieve entries later than the provided ID"),
-        count:  int | None = Query(1, description="The maximum number of elements to be returned")):
+        last_entry_id: str | None = PARAM_LAST_ENTRY_ID,
+        count:  int | None = PARAM_COUNT,
+        input: str | None=PARAM_INPUT, output: str | None=PARAM_OUTPUT,
+    ):
     """This retrieves **count** elements that have later timestamps
     than **last_entry_id** from the specified data stream. The entry
     ID should be in the form of:
@@ -84,15 +84,10 @@ async def get_data_entries(
     the all streams (e.g. just `$`).
 
     """
-    streams = dict(zip(
-        sid.split('+'),
-        itertools.cycle(re.split('\\+| ', last_entry_id))
-    ))
-    try:
-        entries = await STREAM_STORE.get_entries(streams, count)
-    except Exception as err:
-        raise HTTPException(status_code=400, detail=str(err))
-    offsets, content = unzip_entries(entries)
+    entries = await STREAM_STORE.get_entries(init_last(sid, last_entry_id), count)
+    if output:
+        entries = convert_entries(entries, output, input)
+    offsets, content = pack_entries(entries)
     return StreamingResponse(io.BytesIO(content),
                              headers={'entry-offset': offsets},
                              media_type='application/octet-stream')
@@ -118,12 +113,7 @@ async def push_data_ws(
 
             data = await ws.receive_bytes()
             entries = [data[i:j] for i, j in zip(offsets, offsets[1:] + [None])] if batch else [data]
-
-            if parse_meta:
-                metas = [holoframe.load(d) for d in entries]
-                ts = [d.get('time') for d in metas]
-            else:
-                ts = [None] * len(entries)
+            ts = get_ts(entries, parse_meta)
 
             res = await STREAM_STORE.add_entries(zip(sids, ts, entries))
             if ack:
@@ -136,10 +126,10 @@ async def push_data_ws(
 async def pull_data_ws(
         ws: WebSocket,
         sid: str = PARAM_STREAM_ID,
-        count:  int | None = Query(1, description="the maximum number of entries for each receive"),
-        last_entry_id: str | None = Query('$', description="Start retrieving entries laters than the provided ID"),
+        count:  int | None = PARAM_COUNT,
+        last_entry_id: str | None = PARAM_LAST_ENTRY_ID,
         time_sync_id:  str | None = Query(None, description="the maximum number of entries for each receive"),
-
+        input: str|None=PARAM_INPUT, output: str|None=PARAM_OUTPUT,
     ):
     """
     """
@@ -147,86 +137,52 @@ async def pull_data_ws(
         return
     await ws.accept()
     try:
-        last = dict(zip(
-            sid.split('+'),
-            itertools.cycle(re.split('\\+| ', last_entry_id))
-        ))
+        last = init_last(sid, last_entry_id)
         while True:
             entries = await STREAM_STORE.get_entries(last, count, block=10000)
             if entries:
-                offsets, content = unzip_entries(entries)
+                if output:
+                    entries = convert_entries(entries, output, input)
+                offsets, content = pack_entries(entries)
                 await ws.send_text(offsets)
                 await ws.send_bytes(content)
-                # use one stream id as time keeper
-                if time_sync_id:
-                    last_ts = next((d[-1][0] for sid, d in entries if sid == time_sync_id))
-                    if not last_ts:
-                        raise HTTPException(status=500)
-                    for sid, data in entries:
-                        last[sid] = last_ts
-                else:
-                    for sid, data in entries:
-                        sid = sid.decode('utf-8') if isinstance(sid, bytes) else sid
-                        last[sid] = data[-1][0]
-
+                last = update_last(last, entries, time_sync_id)
     except (WebSocketDisconnect, ConnectionClosed):
         pass
 
 
-import time
-class TimeTracker:
-    def __init__(self, time_sync_id: str=None, realtime: bool=False):  # , always_latest: bool=False
-        self.last = {}
-        self.time_sync_id = time_sync_id
-        self.realtime = realtime
-        # self.always_latest = always_latest
 
-    def _get_last_times(self, entries):
-        return {
-            sid.decode('utf-8') if isinstance(sid, bytes) else sid: d[-1][0]
-            for sid, d in entries
-        }
+def init_last(sid, last_entry_id):
+    return dict(zip(
+        sid.split('+'),
+        itertools.cycle(re.split('\\+| ', last_entry_id))
+    ))
 
-    def update(self, entries):
-        times = self._get_last_times(entries)
-        # if self.always_latest:
-        #     return self._update_realtime(times)
-        # use a single stream as time keeper
-        if self.time_sync_id:
-            times = self._time_sync(times)
-        # process in realtime
-        elif self.realtime:
-            times = self._update_realtime(times)
-        # 
-        self._update_independent(times)
+def update_last(last, entries, time_sync_id=None):
+    # use one stream id as time keeper
+    entries = [[sid.decode('utf-8') if isinstance(sid, bytes) else sid, data] for sid, data in entries]
+    if time_sync_id:
+        last_ts = next((d[-1][0] for sid, d in entries if sid == time_sync_id))
+        if not last_ts:
+            return last
+        for sid, data in entries:
+            last[sid] = last_ts
 
-    def _update_independent(self, times):
-        self.last.update(times)
+    for sid, data in entries:
+        last[sid] = data[-1][0]
+    return last
 
-    def _time_sync(self, times):
-        if self.time_sync_id not in times:
-            raise NotImplementedError
-        t = times[self.time_sync_id]
-        return {k: t for k in times}
+def get_ts(entries, parse_meta=False):
+    if parse_meta:
+        metas = [holoframe.load(d) for d in entries]
+        ts = [d.get('time') for d in metas]
+    else:
+        ts = [None] * len(entries)
+    return ts
 
-    last_time = None
-    def _update_realtime(self, times):
-        t = time.time()
-        if self.last_time is None:
-            self.last_time = t
-        dt = t - self.last_time
-        times = {
-            sid: utils.parse_epoch_ts(ts) + dt
-            for sid, ts in times.items()
-        }
-        self.last_time = t
-        return times
-
-    # def _update_request(self, last=None):
-    #     if last is not None:
-    #         if not isinstance(last, dict):
-    #             pass
-            
-
-    # def _update_always_latest(self, times):
-    #     self.last.update({k: '$' for k in times})
+def convert_entries(entries, output_format, input_format=None):
+    converted = []
+    for sid, data in entries:
+        cvt = converters.get_converter(output_format, input_format, sid)
+        converted.append([sid, [[ts, {**d, b'd': cvt(d[b'd'])}] for ts, d in data]])
+    return converted

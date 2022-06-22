@@ -5,7 +5,7 @@ import orjson
 from fastapi import APIRouter, Depends, Query, Path, HTTPException, File, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from app.auth import UserAuth
-from app.recordings import Recordings
+from app.core.recordings import Recordings
 from app.utils import get_tag_names
 
 RECORDINGS = Recordings()

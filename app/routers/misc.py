@@ -1,5 +1,5 @@
 from multiprocessing.sharedctypes import Value
-from fastapi import APIRouter, Depends, HTTPException, status as STATUS
+from fastapi import APIRouter, Depends, Response, HTTPException, status as STATUS
 from fastapi.security import OAuth2PasswordRequestForm
 from app.auth import Token, UserAuth
 from app.context import Context
@@ -16,7 +16,7 @@ router = APIRouter(tags=get_tag_names(tags))
 
 @router.post('/token', response_model=Token,
              summary='Receive a bearer token as part of OAuth2')
-async def authenticate(form_data: OAuth2PasswordRequestForm = Depends()):
+async def authenticate(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     ua = UserAuth()
     if not ua.authenticate(form_data.username, form_data.password):
         raise HTTPException(
@@ -24,7 +24,9 @@ async def authenticate(form_data: OAuth2PasswordRequestForm = Depends()):
             detail='Incorrect username or password',
             headers={'WWW-Authenticate': 'Bearer'},
         )
-    return ua.createToken()
+    token = ua.createToken()
+    response.set_cookie(key="authorization", value=f"Bearer {token['token']}", httponly=True)
+    return token
 
 @router.get('/ping', summary='Seng a ping to health-check the data store')
 async def ping_redis():

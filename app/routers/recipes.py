@@ -4,7 +4,7 @@ from pydantic import BaseModel, EmailStr, Field
 from fastapi import APIRouter, Depends, Body, Path
 from fastapi.encoders import jsonable_encoder
 from app.auth import UserAuth
-from app.session import Session
+# from app.session import Session
 from app.utils import get_tag_names, AllOptional
 from app.core.mongo import DB
 
