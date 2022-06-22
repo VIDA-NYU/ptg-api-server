@@ -1,7 +1,9 @@
 import os
+import json
 import torch
 import clip
 import asyncio
+from PIL import Image
 import redis.asyncio as aioredis
 import ptgctl
 from ptgctl import holoframe
@@ -15,13 +17,15 @@ class App:
     ingredients_prompt = 'a photo of a {}'
     instructions_prompt = '{}'
 
+    current_id = None
+
     def __init__(self, model_name="ViT-B/32", url=None, 
                  id_key='recipe:id', 
                  input_stream='main', 
                  out_prefix='clip:basic-zero-shot'):
         self.api = ptgctl.API(
-            username=os.getenv('API_USER') or 'app', 
-            password=os.getenv('API_PASS') or 'app')
+            username=os.getenv('API_USER') or 'basic-clip', 
+            password=os.getenv('API_PASS') or 'basic-clip')
         self.redis_url = url or os.getenv('REDIS_URL') or 'redis://localhost:6379'
         self.model, self.preprocess = clip.load(model_name, device=device)
         self.id_key = id_key
@@ -65,18 +69,19 @@ class App:
         live = last == '$'
         while recipe_id == self.current_id:
             results = await self.read(sid, last, live=live)
+            print('read', len(results), last, live)
             for sid, samples in results:
                 for ts, data in samples:
                     last = ts
                     z_image = self.encode_image(holoframe.load(data[b'd'])['image'])
-                    tools_similarity = self.compare_image_text(z_image, z_tools)
-                    ingredients_similarity = self.compare_image_text(z_image, z_ingredients)
-                    instructions_similarity = self.compare_image_text(z_image, z_instructions)
+                    tools_similarity = self.compare_image_text(z_image, z_tools)[0]
+                    ingredients_similarity = self.compare_image_text(z_image, z_ingredients)[0]
+                    instructions_similarity = self.compare_image_text(z_image, z_instructions)[0]
 
                     await self.upload({
-                        f'{self.out_prefix}:tools': {'d': dict(zip(tools, tools_similarity))},
-                        f'{self.out_prefix}:ingredients': {'d': dict(zip(ingredients, ingredients_similarity))},
-                        f'{self.out_prefix}:instructions': {'d': dict(zip(instructions, instructions_similarity))},
+                        f'{self.out_prefix}:tools': self.make_stream_data(tools, tools_similarity),
+                        f'{self.out_prefix}:ingredients': self.make_stream_data(ingredients, ingredients_similarity),
+                        f'{self.out_prefix}:instructions': self.make_stream_data(instructions, instructions_similarity),
                     }, ts)
 
     async def read(self, sid, last, live=True, count=1):
@@ -84,12 +89,16 @@ class App:
             return [sid, await self.redis.xrevrange(sid, '$', last, count=count)]
         return await self.redis.xread({sid: last}, count=count)
 
-    def encode_text(self, texts, prompt_format):
-        z = self.model.encode_text([prompt_format.format(x) for x in texts])
+    def encode_text(self, texts, prompt_format=None):
+        if prompt_format:
+            texts = [prompt_format.format(x) for x in texts]
+        toks = clip.tokenize(texts).to(device)
+        z = self.model.encode_text(toks)
         z /= z.norm(dim=-1, keepdim=True)
         return texts, z
 
     def encode_image(self, image):
+        image = Image.fromarray(image)
         image = self.preprocess(image).unsqueeze(0).to(device)
         z_image = self.model.encode_image(image)
         z_image /= z_image.norm(dim=-1, keepdim=True)
@@ -98,7 +107,16 @@ class App:
     def compare_image_text(self, z_image, z_text):
         return (100.0 * z_image @ z_text.T).softmax(dim=-1)
 
-    async def upload(self, streams, ts='*'):
+    def make_stream_data(self, keys, values):
+        data = dict(zip(keys, values.tolist()))
+        return {b'd': json.dumps(data)}
+
+    async def upload(self, streams, ts='*', test=True):
+        if test:
+            print('-', ts, '------')
+            for sid, data in streams.items():
+                print(sid, data[b'd'])
+            return
         async with self.redis.pipeline() as pipe:
             for sid, data in streams.items():
                 pipe.xadd(sid, data, ts or '*')
@@ -132,6 +150,13 @@ async def run(**kw):
     await app.run()
 
 @async_wrap
+async def run_recipe(recipe_id, last=0, **kw):
+    app = App(**kw)
+    await app.connect()
+    app.current_id = recipe_id
+    await app.run_recipe(recipe_id, last=last)
+
+@async_wrap
 async def start(recipe_id, **kw):
     app = App(**kw)
     await app.connect()
@@ -145,6 +170,6 @@ async def stop(**kw):
 
 
 if __name__ == '__main__':
-    funcs = [run, start, stop]
+    funcs = [run, start, stop, run_recipe]
     import fire
     fire.Fire({f.__name__: f for f in funcs})
