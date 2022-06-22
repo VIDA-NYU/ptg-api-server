@@ -67,6 +67,18 @@ services:
   #   restart: unless-stopped
 
 
+  basic-clip:
+    build: ./basic-clip
+    container_name: basic_clip
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
+      - app
+    restart: unless-stopped
+    logging: *lokilogging
+
+
   # Data Storage
 
   redis:
