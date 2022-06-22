@@ -56,17 +56,17 @@ services:
   #  - "traefik.http.middlewares.to-https.redirectscheme.scheme=https"
 
 
-  whoami:
-    image: "traefik/whoami"
-    container_name: "whoami"
-    networks:
-      - web
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.whoami.rule=Host(`whoami.${DOMAIN}`)"
-      - "traefik.http.routers.whoami.entrypoints=websecure"
-      - "traefik.http.routers.whoami.tls.certresolver=le"
-      - "traefik.http.routers.whoami.tls=true"
+  #whoami:
+  #  image: "traefik/whoami"
+  #  container_name: "whoami"
+  #  networks:
+  #    - web
+  #  labels:
+  #    - "traefik.enable=true"
+  #    - "traefik.http.routers.whoami.rule=Host(`whoami.${DOMAIN}`)"
+  #    - "traefik.http.routers.whoami.entrypoints=websecure"
+  #    - "traefik.http.routers.whoami.tls.certresolver=le"
+  #    - "traefik.http.routers.whoami.tls=true"
 
 networks:
   web:
