@@ -30,7 +30,7 @@ PARAM_COUNT = Query(1, description="the maximum number of entries for each recei
 PARAM_INPUT = Query(None, description="The entry input format. If not provided, the format will be guessed.")
 PARAM_OUTPUT = Query(None, description="The entry output format. Use this if you want to convert to a different format - e.g. jpg, png, json.")
 PARAM_PARSE_META = Query(False, description='Try to parse frame as a hololens format to get the timestamp.')
-
+PARAM_TIME_SYNC_ID = Query(None, description="the stream ID to synchronize by")
 
 @router.post('/{stream_id}', summary='Send data to one or multiple streams')
 async def send_data_entries(
@@ -128,7 +128,7 @@ async def pull_data_ws(
         sid: str = PARAM_STREAM_ID,
         count:  int | None = PARAM_COUNT,
         last_entry_id: str | None = PARAM_LAST_ENTRY_ID,
-        time_sync_id:  str | None = Query(None, description="the maximum number of entries for each receive"),
+        time_sync_id:  str | None = PARAM_TIME_SYNC_ID,
         input: str|None=PARAM_INPUT, output: str|None=PARAM_OUTPUT,
     ):
     """
@@ -150,6 +150,36 @@ async def pull_data_ws(
     except (WebSocketDisconnect, ConnectionClosed):
         pass
 
+
+@router.get('/mjpeg/{stream_id}', summary='Retrieve data from one or multiple streams', response_class=StreamingResponse)
+async def stream_jpeg_frames(
+        sid: str = PARAM_STREAM_ID,
+        count:  int | None = PARAM_COUNT,
+        last_entry_id: str | None = PARAM_LAST_ENTRY_ID,
+        time_sync_id:  str | None = PARAM_TIME_SYNC_ID,
+        input: str|None=PARAM_INPUT
+    ):
+    """mjpeg video stream to an image tag.
+
+    ```
+    <img src={`${API_URL}/data/mjpeg/main`} />
+    ```
+    """
+    return StreamingResponse(
+        mjpeg_stream(sid, count, last_entry_id, time_sync_id, input), 
+        media_type="multipart/x-mixed-replace;boundary=frame")
+    
+
+
+async def mjpeg_stream(sid, count, last_entry_id, time_sync_id, input):
+    last = init_last(sid, last_entry_id)
+    while True:
+        entries = await STREAM_STORE.get_entries(last, count, block=10000)
+        if entries:
+            for sid, data in convert_entries(entries, 'jpg', input):
+                for ts, frame in data:
+                    yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            last = update_last(last, entries, time_sync_id)
 
 
 def init_last(sid, last_entry_id):
