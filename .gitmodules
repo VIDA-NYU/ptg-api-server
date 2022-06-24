@@ -1,3 +1,6 @@
 [submodule "ptgctl"]
 	path = ptgctl
 	url = git@github.com:VIDA-NYU/ptgctl.git
+[submodule "ptg-server-ml"]
+	path = ptg-server-ml
+	url = git@github.com:VIDA-NYU/ptg-server-ml.git
