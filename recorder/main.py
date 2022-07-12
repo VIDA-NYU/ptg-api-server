@@ -11,6 +11,9 @@ import asyncio
 import tqdm
 import redis.asyncio as aioredis
 
+import ptgctl
+import ptgctl.tools.local_record_convert as lrc
+
 
 def tqprint(*a, **kw):
     tqdm.tqdm.write(' '.join(map(str, a)), **kw)
@@ -24,10 +27,13 @@ def parse_epoch_time(tid: str):
     return int(tid.split('-')[0])/1000
 
 
+RAW_PATH = 'data/raw'
+POST_PATH = 'data/post'
+
 
 class Disk:
     EXT = '.zip'
-    def __init__(self, *fs, path='./data'):
+    def __init__(self, *fs, path='./data/raw'):
         self.path = os.path.join(path, *fs)
         os.makedirs(self.path, exist_ok=True)
 
@@ -146,13 +152,23 @@ class Recorder:
                 traceback.print_exc()
                 await asyncio.sleep(5)
 
-    async def record_async(self, rec_id, *sids, max_size=9.5 * MB, max_len=1000, batch_size=16, block=20000, last='$'):
+    async def record_async(self, rec_id, *sids, raw_path=RAW_PATH, post_path=POST_PATH, max_size=9.5 * MB, max_len=1000, batch_size=16, block=20000, last='$'):
         print('starting recording', rec_id)
         redis = self.redis
 
-        drive = get_writer('disk', rec_id or '')
+        drive = get_writer('disk', rec_id or '', path=raw_path)
         acc = Batches({s: last for s in sids}, max_len, max_size)
         try:
+            # get the last bit of calibration data
+            cal_sids = [s for s in sids if s.lower().endswith('cal') and s[:-3] in sids]
+            async with redis.pipeline() as p:
+                for sid in cal_sids:
+                    p.xrevrange(sid, '+', '-', count=1)
+                streams = list(zip(cal_sids, await p.execute()))
+                for sid, data in streams:
+                    print('calibration:', sid, len(data))
+                acc.update(streams)
+
             # watch that the recording ID is still the same
             while self.rec_id and self.rec_id == rec_id:
                 # get the next batch of streams
@@ -167,6 +183,7 @@ class Recorder:
                 drive.store(entries, sid)
             acc.close()
             print('done recording', rec_id)
+            lrc.convert(os.path.join(post_path, rec_id))
 
 
 
@@ -181,7 +198,7 @@ class Batches:
 
     def update(self, streams):
         for sid, entries in streams:
-            sid = sid.decode('utf-8')
+            sid = sid.decode('utf-8') if isinstance(sid, bytes) else sid
             if sid not in self.entries:
                 self.size[sid] = 0
                 self.entries[sid] = []
