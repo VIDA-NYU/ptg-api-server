@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from websockets.exceptions import ConnectionClosed
 from app.auth import UserAuth
 # from app.store import DataStream
-from app.core.streams import Streams
+from app.core.streams import Streams, MultiStreamCursor
 from app.utils import get_tag_names, pack_entries
 from app import utils
 from app.core import holoframe, converters
@@ -25,7 +25,8 @@ router = APIRouter(prefix='/data', tags=get_tag_names(tags),
                    dependencies=[Depends(UserAuth.require_authorization)])
 
 PARAM_STREAM_ID = Path(None, alias='stream_id', description='The unique ID of the stream')
-PARAM_LAST_ENTRY_ID = Query('$', description="Start retrieving entries later than the provided ID")
+PARAM_LAST_ENTRY_ID = Query('*', description="Start retrieving entries later than the provided ID")
+PARAM_LAST_ENTRY_ID_BLOCK = Query('$', description="Start retrieving entries later than the provided ID")
 PARAM_COUNT = Query(1, description="the maximum number of entries for each receive")
 PARAM_INPUT = Query(None, description="The entry input format. If not provided, the format will be guessed.")
 PARAM_OUTPUT = Query(None, description="The entry output format. Use this if you want to convert to a different format - e.g. jpg, png, json.")
@@ -127,8 +128,8 @@ async def pull_data_ws(
         ws: WebSocket,
         sid: str = PARAM_STREAM_ID,
         count:  int | None = PARAM_COUNT,
-        last_entry_id: str | None = PARAM_LAST_ENTRY_ID,
-        time_sync_id:  str | None = PARAM_TIME_SYNC_ID,
+        last_entry_id: str | None = PARAM_LAST_ENTRY_ID_BLOCK,
+        time_sync_id:  int | str | None = PARAM_TIME_SYNC_ID,
         input: str|None=PARAM_INPUT, output: str|None=PARAM_OUTPUT,
     ):
     """
@@ -137,38 +138,22 @@ async def pull_data_ws(
         return
     await ws.accept()
     try:
+        latest = last_entry_id is None or '$' in last_entry_id 
+        if isinstance(time_sync_id, int):
+            time_sync_id = sid.split('+')[time_sync_id]
         last = init_last(sid, last_entry_id)
+        cursor = MultiStreamCursor(last, latest=latest, time_sync_id=time_sync_id, block=10000)
         while True:
-            entries = await STREAM_STORE.get_entries(last, count, block=10000)
+            entries = await cursor.next()
             if entries:
                 if output:
                     entries = convert_entries(entries, output, input)
                 offsets, content = pack_entries(entries)
                 await ws.send_text(offsets)
                 await ws.send_bytes(content)
-                last = update_last(last, entries, time_sync_id)
     except (WebSocketDisconnect, ConnectionClosed):
         pass
 
-
-@router.get('/mjpeg/{stream_id}', summary='Retrieve data from one or multiple streams', response_class=StreamingResponse)
-async def stream_jpeg_frames(
-        sid: str = PARAM_STREAM_ID,
-        count:  int | None = PARAM_COUNT,
-        last_entry_id: str | None = PARAM_LAST_ENTRY_ID,
-        time_sync_id:  str | None = PARAM_TIME_SYNC_ID,
-        input: str|None=PARAM_INPUT
-    ):
-    """mjpeg video stream to an image tag.
-
-    ```
-    <img src={`${API_URL}/data/mjpeg/main`} />
-    ```
-    """
-    return StreamingResponse(
-        mjpeg_stream(sid, count, last_entry_id, time_sync_id, input), 
-        media_type="multipart/x-mixed-replace;boundary=frame")
-    
 
 
 async def mjpeg_stream(sid, count, last_entry_id, time_sync_id, input):
@@ -197,9 +182,11 @@ def update_last(last, entries, time_sync_id=None):
             return last
         for sid, data in entries:
             last[sid] = last_ts
+        return last
 
     for sid, data in entries:
         last[sid] = data[-1][0]
+    print(last)
     return last
 
 def get_ts(entries, parse_meta=False):

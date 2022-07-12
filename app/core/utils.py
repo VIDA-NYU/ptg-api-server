@@ -8,6 +8,8 @@ def parse_ts(tid):
 
 def parse_epoch_ts(tid):
     '''Convert a redis timestamp to epoch seconds.'''
+    if isinstance(tid, bytes):
+        tid = tid.decode('utf-8')
     return int(tid.split('-')[0])/1000
 
 def format_ts(dt: datetime.datetime):

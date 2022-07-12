@@ -14,3 +14,4 @@ celery
 # torch
 starlette_exporter
 motor
+aiofiles

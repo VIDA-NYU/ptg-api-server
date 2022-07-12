@@ -12,7 +12,7 @@ class Session:
         pass
 
     async def get_session(self):
-        id, step = await self.get_keys(RECIPE_ID, RECIPE_STEP)
+        id, step = await self.get_keys(RECIPE_ID, RECIPE_STEP, asdict=False)
         return dict(recipe_id=id, step=step)
 
     async def current_recipe(self, info=False):
@@ -41,7 +41,7 @@ class Session:
         return await ctx.redis.get(RECIPE_STEP, step_index)
 
     async def get_keys(self, *keys: str, asdict=True):
-        with  ctx.redis.pipeline() as pipe:
+        async with ctx.redis.pipeline() as pipe:
             for k in keys:
                 pipe.get(k)
             values = await pipe.execute()

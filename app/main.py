@@ -4,10 +4,12 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette_exporter import PrometheusMiddleware, handle_metrics
 from app.context import Context
-from app.routers import data, misc, streams, recipes, session, recording
+from app.core.recordings import RECORDING_POST_PATH
+from app.static import AuthStaticFiles
+from app.routers import data, misc, streams, recipes, session, recording, mjpeg
 
 ctx = Context.instance()
-routers = [misc, streams, data, recipes, session, recording]
+routers = [misc, streams, data, recipes, session, recording, mjpeg]
 tags = [t for r in routers for t in r.tags]
 
 app = FastAPI(title=ctx.config['title'],
@@ -18,13 +20,10 @@ app = FastAPI(title=ctx.config['title'],
 for r in routers:
     app.include_router(r.router)
 
-# app.mount(ctx.config['root_path'], app)  # causing recursive error
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=['*'],
-    allow_methods=['*'],
-    allow_headers=['*'],
-)
+app.mount(
+    "/recordings/static", 
+    AuthStaticFiles(directory=RECORDING_POST_PATH), 
+    name="recording files")
 
 app.add_middleware(PrometheusMiddleware)
 app.add_route("/metrics", handle_metrics)
@@ -44,3 +43,13 @@ async def validation_exception_handler(request, err):
             {'msg': str(err), 'type': type(err).__name__}
         ]
     })
+
+# app.mount(ctx.config['root_path'], app)  # causing recursive error
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=['*'],
+    #allow_methods=['*'],
+    allow_headers=['*'],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
+)

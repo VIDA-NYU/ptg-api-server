@@ -11,8 +11,17 @@ from app.context import Context
 #from starlette.requests import Request as StarletteRequest
 
 class OAuth2PasswordBearerCookie(OAuth2PasswordBearer):
+    def get_authorization(self, request: Request) -> str:
+        # get authorization from token query param, auth header, or cookie
+        token = request.query_params.get('token')
+        auth = f'Bearer {token}' if token else None
+        auth = auth or request.headers.get("Authorization")
+        auth = auth or request.cookies.get("authorization")
+        #print(auth, flush=True)
+        return auth
+
     async def __call__(self, request: Request) -> Optional[str]:
-        authorization: str = request.headers.get("Authorization") or request.cookies.get("authorization")
+        authorization: str = self.get_authorization(request)
         scheme, param = get_authorization_scheme_param(authorization)
         if not authorization or scheme.lower() != "bearer":
             if self.auto_error:

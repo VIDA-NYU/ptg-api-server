@@ -5,6 +5,8 @@ from app.core.utils import parse_epoch_ts, parse_ts
 from app.context import Context
 
 RECORDING_PATH = os.getenv("RECORDING_PATH") or '/data/recordings'
+RECORDING_RAW_PATH = os.path.join(RECORDING_PATH, 'raw')
+RECORDING_POST_PATH = os.path.join(RECORDING_PATH, 'post')
 
 
 ctx = Context.instance()
@@ -14,14 +16,21 @@ fglob = lambda *fs: glob.glob(os.path.join(*fs))
 class Recordings:
     recording_id_key='recording:id'
     def list_recordings(self):
-        fs = fglob(RECORDING_PATH, '*')
+        fs = fglob(RECORDING_RAW_PATH, '*')
         return [os.path.basename(f) for f in fs]
 
     def list_recording_info(self):
         return [self.get_recording_info(rid) for rid in self.list_recordings()]
 
+    async def get_current_recording(self, info=False):
+        rid = await ctx.redis.get(self.recording_id_key)
+        rid = rid.decode('utf-8') if rid else rid
+        if info:
+            return self.get_recording_info(rid) if rid else None
+        return rid
+
     def get_recording_info(self, rec_id):
-        stream_dirs = fglob(RECORDING_PATH, rec_id, '*')
+        stream_dirs = fglob(RECORDING_RAW_PATH, rec_id, '*')
         streams = [os.path.basename(f) for f in stream_dirs]
         stream_info = {k: self.get_stream_info(rec_id, k) for k in streams}
         return {
@@ -30,12 +39,13 @@ class Recordings:
             "size_mb": sum(d['size_mb'] or 0 for d in stream_info.values()),
             **self.first_last_times(*zip(*(
                 (d['first-entry'], d['last-entry'])
-                for d in stream_info.values()
+                for sid, d in stream_info.items()
+                if not sid.endswith('Cal')
             )))
         }
 
     def get_stream_info(self, rec_id, name):
-        fs = fglob(RECORDING_PATH, rec_id, name, '*')
+        fs = fglob(RECORDING_RAW_PATH, rec_id, name, '*')
         return {
             "chunk_count": len(fs),
             "size_mb": sum(os.path.getsize(f) / (1024.**2) for f in fs),

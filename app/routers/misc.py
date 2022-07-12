@@ -1,5 +1,5 @@
 from multiprocessing.sharedctypes import Value
-from fastapi import APIRouter, Depends, Response, HTTPException, status as STATUS
+from fastapi import APIRouter, Depends, Request, Response, HTTPException, status as STATUS
 from fastapi.security import OAuth2PasswordRequestForm
 from app.auth import Token, UserAuth
 from app.context import Context
@@ -25,7 +25,10 @@ async def authenticate(response: Response, form_data: OAuth2PasswordRequestForm 
             headers={'WWW-Authenticate': 'Bearer'},
         )
     token = ua.createToken()
-    response.set_cookie(key="authorization", value=f"Bearer {token['token']}", httponly=True)
+    response.set_cookie(
+        "authorization", f"Bearer {token['access_token']}", 
+        httponly=True, max_age=60*60*24)
+    #print(response.cookies.get('authorization'))
     return token
 
 @router.get('/ping', summary='Seng a ping to health-check the data store')
@@ -35,3 +38,12 @@ async def ping_redis():
 @router.get('/ping/error', summary='Seng a ping to test exception handling')
 async def ping_error():
     raise ValueError("This is an error purposefully thrown by the server")
+
+@router.get('/ping/auth', summary='Seng a ping to debug auth')
+async def what_auth(request: Request):
+    return {
+        "query": request.query_params.get('token'),
+        "headers": request.headers.get("Authorization"),
+        "cookies": request.cookies.get("authorization")
+    }
+

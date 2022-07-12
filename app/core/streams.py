@@ -89,9 +89,76 @@ class Streams:
             if nonstar:
                 calls[1] = ctx.redis.xread(nonstar, count=count, block=block)
             res_star, res_nonstar = await asyncio.gather(*(x or noop() for x in calls))
+            print('block', block, [[s, len(t)] for s,t in res_nonstar])
 
         entries = [(sid, sorted(d)) for sid, d in zip(star, res_star)] + res_nonstar
         return entries
 
 async def noop():
     return []
+
+
+
+def maybe_utf_encode(txt):
+    return txt.encode('utf-8') if not isinstance(txt, bytes) else txt
+
+class MultiStreamCursor:
+    def __init__(self, last, latest=True, block=10000, time_sync_id=None, redis=None):
+        self.r = ctx.redis if redis is None else redis
+        self.last = {maybe_utf_encode(sid): t for sid, t in last.items()}
+        self.latest = latest
+        self.block = block
+        self.time_sync_id = maybe_utf_encode(time_sync_id)
+
+    async def next(self, **kw):
+        # query next value
+        result = await (self.next_latest(**kw) if self.latest else self.next_consecutive(**kw))
+        # update to the latest timestamp
+        for sid, ts in result:
+            self.last[sid] = max((t for t, _ in ts), default=self.last)
+        if self.time_sync_id:
+            main_ts = self.last[self.time_sync_id]
+            for sid in self.last:
+                self.last[sid] = main_ts
+        return result
+
+    async def next_latest(self, **kw):
+        '''Query the latest new frame.
+
+        Not all streams are guaranteed to return a value.
+
+        1 <= len(streams) <= len(stream_id_query)
+
+        Scenarios:
+         - there is new data in all streams
+            - returned: the latest new value value for each stream
+         - there is no new data in any stream
+            - initial revrange queries all return empty
+            - block until one of the streams returns a value
+            - XXX: we could run revrange again if we are still missing streams?
+         - there is some new data in the streams
+            - returned: the streams with new data
+        '''
+        result = await self._next_latest(**kw)
+        if result:
+            return result
+        return await self.next_consecutive(**kw)
+
+    async def _next_latest(self, sids=None, count=1):
+        sids = sids or self.last
+        # xrevrange, don't include last queried value
+        async with self.r.pipeline() as p:
+            for s in sids:
+                p.xrevrange(s, '+', f'({self.last[s]}', count=count)
+            return [(s, r) for s, r in zip(sids, await p.execute()) if r]
+
+
+    async def next_consecutive(self, count=1):
+        '''Query the next consecutive frame.
+
+        Will return whatever is available. Will only block if no streams
+        are
+        '''
+        # block using last timestamp
+        return await self.r.xread(self.last, block=self.block, count=count)
+

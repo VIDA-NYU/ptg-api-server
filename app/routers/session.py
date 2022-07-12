@@ -35,7 +35,7 @@ async def get_recipe(info: bool | None = Query(False, description="set to 'true'
 async def start_recipe(recipe_id: str = Query(None, description="set the current recipe")):
     return await session.start_recipe(recipe_id)
 
-@router.put('/recipe', summary='Stop recipe')
+@router.delete('/recipe', summary='Stop recipe')
 async def stop_recipe():
     return await session.clear_recipe()
 

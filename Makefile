@@ -14,6 +14,9 @@ https:  ## bring up the https reverse proxy
 services: build-ptgctl  ## bring just the services up
 	docker-compose up -d --build
 
+ml: build-ptgctl  ## bring up the machine learning containers
+	cd ptg-server-ml && docker-compose up -d --build && cd -
+
 build-ptgctl:  ## build the ptgctl container
 	docker build -t ptgctl -t ptgctl:latest ./ptgctl
 
