@@ -66,9 +66,9 @@ class Recordings:
             "last-entry-time": parse_ts(last).strftime("%c") if last else None,
         }
 
-    def create_recording_id(self):
+    def create_recording_id(self, dt_sep='-', sep='.'):
         #return f"rec-at-{str(int(time.time()))}"
-        return datetime.datetime.now().strftime("%c")
+        return datetime.datetime.now().strftime(f"%Y{sep}%m{sep}%d{dt_sep}%H{sep}%M{sep}%S")
 
     async def start(self, rec_id=None):
         rec_id = rec_id or self.create_recording_id()

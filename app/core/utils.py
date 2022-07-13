@@ -23,3 +23,8 @@ def format_epoch_ts(tid: float):
 def redis_id_to_iso(rid):
     '''Convert a redis timestamp to a iso format.'''
     return parse_ts(rid).isoformat(sep=' ')
+
+parse_time = parse_ts
+parse_epoch_time = parse_epoch_ts
+format_time = format_ts
+format_epoch_time = format_epoch_ts

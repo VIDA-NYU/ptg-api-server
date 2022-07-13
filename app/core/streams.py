@@ -1,9 +1,10 @@
+import time
 import asyncio
 import orjson
 from collections import defaultdict
 from typing import Awaitable
 from app.context import Context
-from app.core.utils import redis_id_to_iso
+from app.core.utils import redis_id_to_iso,  parse_epoch_time
 
 ctx = Context.instance()
 
@@ -100,7 +101,10 @@ async def noop():
 
 
 def maybe_utf_encode(txt):
-    return txt.encode('utf-8') if not isinstance(txt, bytes) else txt
+    return txt.encode('utf-8') if isinstance(txt, str) else txt
+
+def maybe_utf_decode(txt):
+    return txt.decode('utf-8') if isinstance(txt, bytes) else txt
 
 class MultiStreamCursor:
     def __init__(self, last, latest=True, block=10000, time_sync_id=None, redis=None):
@@ -147,10 +151,19 @@ class MultiStreamCursor:
     async def _next_latest(self, sids=None, count=1):
         sids = sids or self.last
         # xrevrange, don't include last queried value
+        start_time = time.time()
         async with self.r.pipeline() as p:
             for s in sids:
-                p.xrevrange(s, '+', f'({self.last[s]}', count=count)
-            return [(s, r) for s, r in zip(sids, await p.execute()) if r]
+                l = maybe_utf_decode(self.last[s])
+                p.xrevrange(s, '+', f'({l}' if l != '$' else '-', count=count)
+            # if we use $, filter out any timestamps before the start time (since xrevrange doesn't actually support $)
+            # also filter out empty stream IDs
+            return [
+                (s, r) for s, r in (
+                    (s, [(ts, x) for ts, x in r if parse_epoch_time(ts) > start_time] if self.last[s] == '$' else r) 
+                    for s, r in zip(sids, await p.execute()) 
+                ) if r
+            ]
 
 
     async def next_consecutive(self, count=1):
