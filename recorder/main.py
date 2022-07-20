@@ -12,7 +12,7 @@ import tqdm
 import redis.asyncio as aioredis
 
 import ptgctl
-import ptgctl.tools.local_record_convert as lrc
+import ptgctl.tools.local_record_convert2 as lrc
 
 
 def tqprint(*a, **kw):
@@ -152,7 +152,7 @@ class Recorder:
                 traceback.print_exc()
                 await asyncio.sleep(5)
 
-    async def record_async(self, rec_id, *sids, raw_path=RAW_PATH, post_path=POST_PATH, max_size=9.5 * MB, max_len=1000, batch_size=16, block=20000, last='$'):
+    async def record_async(self, rec_id, *sids, raw_path=RAW_PATH, post_path=POST_PATH, max_size=9.5 * MB, max_len=1000, batch_size=16, block=5000, last='$'):
         print('starting recording', rec_id)
         redis = self.redis
 
@@ -182,8 +182,9 @@ class Recorder:
             for sid, entries in acc.entries.items():
                 drive.store(entries, sid)
             acc.close()
-            print('done recording', rec_id)
-            lrc.convert(os.path.join(post_path, rec_id))
+            print()
+            print('done recording', rec_id, flush=True)
+            lrc.convert(os.path.join(raw_path, rec_id), out_path=post_path)
 
 
 
