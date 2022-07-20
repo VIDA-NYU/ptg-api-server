@@ -6,7 +6,7 @@ help: ## PTG API Server
 
 
 
-full: https services  ## bring the full system up
+full: https services ml  ## bring the full system up
 
 https:  ## bring up the https reverse proxy
 	docker-compose -f docker-compose.https.yaml up -d --build
@@ -24,3 +24,7 @@ pull:
 	git pull --recurse-submodules
 
 update: pull services  ## pull then update docker
+
+
+down:  ## docker-compose down everything
+	docker-compose -f docker-compose.yaml -f docker-compose.https.yaml -f ptg-server-ml/docker-compose.yaml down

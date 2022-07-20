@@ -90,7 +90,7 @@ class Streams:
             if nonstar:
                 calls[1] = ctx.redis.xread(nonstar, count=count, block=block)
             res_star, res_nonstar = await asyncio.gather(*(x or noop() for x in calls))
-            print('block', block, [[s, len(t)] for s,t in res_nonstar])
+            #print('block', block, [[s, len(t)] for s,t in res_nonstar])
 
         entries = [(sid, sorted(d)) for sid, d in zip(star, res_star)] + res_nonstar
         return entries
