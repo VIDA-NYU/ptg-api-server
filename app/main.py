@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette_exporter import PrometheusMiddleware, handle_metrics
 from app.context import Context
-from app.core.recordings import RECORDING_POST_PATH
+from app.core.recordings import RECORDING_POST_PATH, RECORDING_RAW_PATH
 from app.static import AuthStaticFiles
 from app.routers import data, misc, streams, recipes, session, recording, mjpeg
 
@@ -24,6 +24,12 @@ app.mount(
     "/recordings/static", 
     AuthStaticFiles(directory=RECORDING_POST_PATH), 
     name="recording files")
+
+# XXX: not sure with order of precidence
+app.mount(
+    "/recordings/static/raw",
+    AuthStaticFiles(directory=RECORDING_RAW_PATH),
+    name="raw recording files")
 
 app.add_middleware(PrometheusMiddleware)
 app.add_route("/metrics", handle_metrics)
