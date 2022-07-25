@@ -4,3 +4,6 @@
 [submodule "ptg-server-ml"]
 	path = ptg-server-ml
 	url = git@github.com:VIDA-NYU/ptg-server-ml.git
+[submodule "tim-dashboard"]
+	path = tim-dashboard
+	url = git@github.com:VIDA-NYU/tim-dashboard.git
