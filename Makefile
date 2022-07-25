@@ -17,6 +17,9 @@ services: build-ptgctl  ## bring just the services up
 ml: build-ptgctl  ## bring up the machine learning containers
 	cd ptg-server-ml && docker-compose up -d --build && cd -
 
+dash:  ## bring up the dashboard containers
+	cd tim-dashboard && ls && docker-compose --env-file ../.env -f docker-compose.prod.yml up -d --build && cd -
+
 build-ptgctl:  ## build the ptgctl container
 	docker build -t ptgctl -t ptgctl:latest ./ptgctl
 

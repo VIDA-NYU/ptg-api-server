@@ -16,6 +16,9 @@ services:
       - "8000"
     ports:
      - 7890:8000
+    networks:
+      - web
+      - default
     volumes:
       - ${VOLUMES}/recordings:/data/recordings
     # - './app:/app'
