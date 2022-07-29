@@ -4,10 +4,10 @@ import glob
 import mimetypes
 
 import orjson
-from fastapi import APIRouter, Depends, Query, Path, Header, HTTPException, File, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, Path, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from app.auth import UserAuth
-from app.core.recordings import Recordings, RECORDING_POST_PATH
+from app.core.recordings import Recordings, RecordingPlayer
 from app.utils import get_tag_names
 
 RECORDINGS = Recordings()
@@ -53,3 +53,19 @@ async def record_streams_stop():
     return await RECORDINGS.stop()
 
 
+@router.websocket('/replay')
+async def replay_recording(
+        ws: WebSocket,
+        rec_id: str = Query(None, description="the recording ID"),
+        prefix: str | None = Query("", description="the output prefix"),
+        sid: str | None = Query("main", description="the stream id(s) to be replayed, can be joined by '+'"),
+        fullspeed: bool | None = Query(False, description="set to true to replay as fast as possible"),
+        interval: float | None = Query(1.0, description="the time delay between progress updates"),
+    ):
+    """
+    """
+    if not (await UserAuth.authorizeWebSocket(ws)):
+        return
+    await ws.accept()
+    player = RecordingPlayer()
+    await player.replay(ws, rec_id, prefix, sid.split('+'), fullspeed, interval)

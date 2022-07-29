@@ -131,6 +131,7 @@ async def pull_data_ws(
         last_entry_id: str | None = PARAM_LAST_ENTRY_ID_BLOCK,
         time_sync_id:  int | str | None = PARAM_TIME_SYNC_ID,
         input: str|None=PARAM_INPUT, output: str|None=PARAM_OUTPUT,
+        ack: bool | None = Query(False, description="set to 'true' to wait for the client to send an acknowledgement message (of any content) before sending more data"),
     ):
     """
     """
@@ -151,6 +152,8 @@ async def pull_data_ws(
                 offsets, content = pack_entries(entries)
                 await ws.send_text(offsets)
                 await ws.send_bytes(content)
+                if ack:
+                    await ws.receive()
     except (WebSocketDisconnect, ConnectionClosed):
         pass
 

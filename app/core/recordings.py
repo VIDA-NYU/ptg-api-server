@@ -1,8 +1,16 @@
-import os
-import glob
+import asyncio
+import contextlib
 import datetime
-from app.core.utils import parse_epoch_ts, parse_ts
+import glob
+import orjson
+import os
+import time
 from app.context import Context
+from app.core.streams import Streams
+from app.core.utils import parse_epoch_ts, parse_ts, format_epoch_ts
+from collections import defaultdict
+from fastapi import WebSocketDisconnect
+from websockets.exceptions import ConnectionClosed
 
 RECORDING_PATH = os.getenv("RECORDING_PATH") or '/data/recordings'
 RECORDING_RAW_PATH = os.path.join(RECORDING_PATH, 'raw')
@@ -45,7 +53,7 @@ class Recordings:
         }
 
     def get_stream_info(self, rec_id, name):
-        fs = fglob(RECORDING_RAW_PATH, rec_id, name, '*')
+        fs = sorted(fglob(RECORDING_RAW_PATH, rec_id, name, '*'))
         return {
             "chunk_count": len(fs),
             "size_mb": sum(os.path.getsize(f) / (1024.**2) for f in fs),
@@ -78,6 +86,83 @@ class Recordings:
     async def stop(self):
         return await ctx.redis.delete(self.recording_id_key)
 
+class RecordingPlayer:
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.done = asyncio.Event()
+        self.active = set()
+        self.counter = defaultdict(int)
+
+    def clear_counter(self):
+        self.counter.clear()
+
+    def update_counter(self, sid):
+        self.counter[sid] += 1
+
+    def get_progress_json(self):
+        progress = {'updates': list(self.counter.items()), 'active': list(self.active)}
+        return orjson.dumps(progress).decode('utf-8')
+
+    def is_done(self):
+        return self.done.is_set()
+
+    def set_inactive(self, name):
+        self.active.discard(name)
+
+    async def replay_progress(self, ws, update_interval=1):
+        try:
+            while len(self.active)>0:
+                await asyncio.sleep(update_interval)
+                response = self.get_progress_json()
+                self.clear_counter()
+                await ws.send_text(response)
+        except (WebSocketDisconnect, ConnectionClosed):
+            pass
+        finally:
+            self.done.set()
+
+    async def replay_stream(self, rec_id, prefix, name, fullspeed):
+        def _unzip(data):
+            import io
+            import zipfile
+            archive = io.BytesIO(data)
+            with zipfile.ZipFile(archive, 'r', zipfile.ZIP_STORED, False) as zf:
+                for ts in sorted(zf.namelist()):
+                    with zf.open(ts, 'r') as f:
+                        data = f.read()
+                        yield ts, data
+
+        sid = f'{prefix}{name}'
+        fs = sorted(fglob(RECORDING_RAW_PATH, rec_id, name, '*'))
+        last = None
+        try:
+            for fname in fs:
+                with open(fname, 'rb') as f:
+                    for ts, data in _unzip(f.read()):
+                        t = parse_epoch_ts(ts)
+                        timeout = 0
+                        if not fullspeed:
+                            now = (t, time.time())
+                            last = last or now
+                            timeout = max(timeout, (now[0]-last[0]) - (now[1]-last[1]))
+                        with contextlib.suppress(asyncio.TimeoutError):
+                            await asyncio.wait_for(self.done.wait(), timeout)
+                        if self.is_done():
+                            return
+                        last = (t, time.time())
+                        await Streams.add_entries(((sid, format_epoch_ts(last[1]), data),))
+                        self.update_counter(name)
+        finally:
+            self.set_inactive(name)
+
+    async def replay(self, ws, rec_id, prefix, sids, fullspeed, update_interval=1):
+        self.active = set(sids)
+        await asyncio.gather(self.replay_progress(ws, update_interval),
+                             *(self.replay_stream(rec_id, prefix, name, fullspeed)
+                               for name in self.active))
 
 # class Recordings:
 #     def __init__(self) -> None:
