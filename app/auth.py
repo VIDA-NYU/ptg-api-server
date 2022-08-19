@@ -72,7 +72,7 @@ class UserAuth:
             'exp': exp,
         }
         token = jwt.encode(token, SECRET_KEY, algorithm=ALGORITHM)
-        return {'access_token': token, 'token_type': 'bearer'}
+        return {'access_token': token, 'token_type': 'bearer', 'exp': exp}
 
     @staticmethod
     async def authorizeWebSocket(ws):

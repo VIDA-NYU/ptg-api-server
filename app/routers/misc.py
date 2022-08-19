@@ -1,7 +1,7 @@
 from multiprocessing.sharedctypes import Value
 from fastapi import APIRouter, Depends, Request, Response, HTTPException, status as STATUS
 from fastapi.security import OAuth2PasswordRequestForm
-from app.auth import Token, UserAuth
+from app.auth import Token, UserAuth, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.context import Context
 from app.utils import get_tag_names
 
@@ -27,7 +27,7 @@ async def authenticate(response: Response, form_data: OAuth2PasswordRequestForm 
     token = ua.createToken()
     response.set_cookie(
         "authorization", f"Bearer {token['access_token']}", 
-        httponly=True, max_age=60*60*24)
+        httponly=True, max_age=60*(ACCESS_TOKEN_EXPIRE_MINUTES - 1))
     #print(response.cookies.get('authorization'))
     return token
 
