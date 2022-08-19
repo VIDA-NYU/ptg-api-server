@@ -25,6 +25,7 @@ router = APIRouter(prefix='/recordings', tags=get_tag_names(tags),
 
 PARAM_RECORDING_ID = Path(description='The ID of the recording.')
 PARAM_INFO  = Query(False, description="set to 'true' to return recording metadata as well")
+PARAM_NEW_RECORDING_ID = Path(description='The new ID of the recording.')
 
 @router.get('/', summary='List recordings')
 async def list_recordings(info: bool | None = PARAM_INFO):
@@ -51,6 +52,14 @@ async def record_streams_start(rec_id: str | None = Query(None, description="spe
 @router.put('/stop', summary='Stop recording data')
 async def record_streams_stop():
     return await RECORDINGS.stop()
+
+@router.put('/{recording_id}/rename/{new_id}', summary='rename recording')
+async def rename_recording(recording_id: str = PARAM_RECORDING_ID, new_id: str=PARAM_NEW_RECORDING_ID):
+    return RECORDINGS.rename_recording(recording_id, new_id)
+
+@router.delete('/{recording_id}', summary='delete recording')
+async def delete_recording(recording_id: str = PARAM_RECORDING_ID):
+    return RECORDINGS.delete_recording(recording_id)
 
 
 @router.websocket('/replay')

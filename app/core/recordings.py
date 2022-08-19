@@ -5,6 +5,7 @@ import glob
 import orjson
 import os
 import time
+import shutil
 from app.context import Context
 from app.core.streams import Streams
 from app.core.utils import parse_epoch_ts, parse_ts, format_epoch_ts
@@ -49,7 +50,8 @@ class Recordings:
                 (d['first-entry'], d['last-entry'])
                 for sid, d in stream_info.items()
                 if not sid.endswith('Cal')
-            )))
+            ))),
+            "files": os.listdir(os.path.join(RECORDING_POST_PATH, rec_id)),
         }
 
     def get_stream_info(self, rec_id, name):
@@ -80,11 +82,46 @@ class Recordings:
 
     async def start(self, rec_id=None):
         rec_id = rec_id or self.create_recording_id()
-        await ctx.redis.set(self.recording_id_key, rec_id)
+        is_set = await ctx.redis.set(self.recording_id_key, rec_id)
+        if not is_set:
+            raise RuntimeError(f"Recording {rec_id} didn't start.")
         return rec_id
 
     async def stop(self):
         return await ctx.redis.delete(self.recording_id_key)
+
+    def rename_recording(self, old_name, new_name):
+        raw_old_path = safe_subdir(RECORDING_RAW_PATH, old_name)
+        raw_new_path = safe_subdir(RECORDING_RAW_PATH, new_name)
+        if os.path.exists(raw_new_path):
+            raise OSError(f"Recording {new_name} already exists!")
+        if os.path.exists(raw_old_path):
+            os.rename(raw_old_path, raw_new_path)
+        print(os.path.exists(raw_old_path), raw_old_path, raw_new_path, flush=True)
+
+        post_old_path = safe_subdir(RECORDING_POST_PATH, old_name)
+        post_new_path = safe_subdir(RECORDING_POST_PATH, new_name)
+        if os.path.exists(post_old_path):
+            os.rename(post_old_path, post_new_path)
+        print(os.path.exists(post_old_path), post_old_path, post_new_path, flush=True)
+        return os.path.exists(raw_new_path), not os.path.exists(raw_old_path)
+
+    def delete_recording(self, name):
+        raw_path = safe_subdir(RECORDING_RAW_PATH, name)
+        if os.path.exists(raw_path):
+            shutil.rmtree(raw_path)
+        post_path = safe_subdir(RECORDING_POST_PATH, name)
+        if os.path.exists(post_path):
+            shutil.rmtree(post_path)
+        return not os.path.exists(raw_path), not os.path.exists(post_path)
+
+
+def safe_subdir(root, name):
+    name = os.path.normpath(f'/{name}').strip('/')
+    root = os.path.normpath(os.path.abspath(root))
+    path = os.path.normpath(os.path.abspath(os.path.join(root, name)))
+    assert os.path.commonprefix([root, path]) == root and root != path
+    return path
 
 class RecordingPlayer:
 
