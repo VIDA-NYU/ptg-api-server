@@ -1,5 +1,7 @@
+import os
 import patch  # fastapi fixes
-from fastapi import FastAPI
+import aiofiles
+from fastapi import FastAPI, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette_exporter import PrometheusMiddleware, handle_metrics
@@ -30,6 +32,19 @@ app.mount(
     "/recordings/static/raw",
     AuthStaticFiles(directory=RECORDING_RAW_PATH),
     name="raw recording files")
+
+@app.post("/recordings/upload/{recording_id}/{fname}")
+async def create_upload_file(recording_id: str, fname: str, file: UploadFile, overwrite: bool=False):
+    assert recording_id and fname, "must specify recording ID and filename"
+    fname = os.path.normpath(os.path.join(*recording_id.split('/'), *fname.split('/')))
+    full_path = os.path.join(RECORDING_POST_PATH, fname)
+    if not overwrite and os.path.isfile(full_path):
+        raise OSError(f"File {fname} already exists.")
+    async with aiofiles.open(full_path, 'wb') as out_file:
+        while content := await file.read(1024):
+            await out_file.write(content)
+    return {"filename": fname, "url": f"/recordings/static/{fname}"}
+
 
 app.add_middleware(PrometheusMiddleware)
 app.add_route("/metrics", handle_metrics)
