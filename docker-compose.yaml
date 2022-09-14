@@ -39,17 +39,17 @@ services:
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.services.api.loadbalancer.server.port=8000"
 
-  recorder:
-    build: ./recorder
-    container_name: recorder
-    volumes:
-     - ${VOLUMES}/recordings:/src/app/data
-    environment:
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      - redis
-    restart: unless-stopped
-    logging: *lokilogging
+  # recorder:
+  #   build: ./recorder
+  #   container_name: recorder
+  #   volumes:
+  #    - ${VOLUMES}/recordings:/src/app/data
+  #   environment:
+  #     REDIS_URL: redis://redis:6379
+  #   depends_on:
+  #     - redis
+  #   restart: unless-stopped
+  #   logging: *lokilogging
 
   # Machine Learning for Streams
 
@@ -81,7 +81,8 @@ services:
     restart: unless-stopped
     ports:
       - 6379:6379
-    #volumes:
+    volumes:
+      - ${VOLUMES}/redis-data:/data
     #  - ./redis/redis_6789.conf:/usr/local/etc/redis/redis.conf
     environment:
       ALLOW_EMPTY_PASSWORD: 'yes'
@@ -111,31 +112,30 @@ services:
   #     - redis
   #     - redisinsight
   #   command: >
-  #     localhost:8035/add/?name=redis&host=redis&port=6379
-
-  hls:
-    build: ./hls
-    container_name: hls
-    restart: unless-stopped
-    networks:
-      - web
-      - default
-    ports:
-     - 1935:1935
-     - 8089:80
-    expose:
-      - "80"
-      - "1935"
-    volumes:
-      - ./app_data/hls:/tmp/hls
-    logging: *lokilogging
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.hls.rule=Host(`hls.${DOMAIN}`)"
-      - "traefik.http.routers.hls.entrypoints=websecure"
-      - "traefik.http.routers.hls.tls.certresolver=le"
-      - "traefik.http.routers.hls.tls=true"
-      - "traefik.http.services.hls.loadbalancer.server.port=80"
+  
+  # hls:
+  #   build: ./hls
+  #   container_name: hls
+  #   restart: unless-stopped
+  #   networks:
+  #     - web
+  #     - default
+  #   ports:
+  #    - 1935:1935
+  #    - 8089:80
+  #   expose:
+  #     - "80"
+  #     - "1935"
+  #   volumes:
+  #     - ./app_data/hls:/tmp/hls
+  #   logging: *lokilogging
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.hls.rule=Host(`hls.${DOMAIN}`)"
+  #     - "traefik.http.routers.hls.entrypoints=websecure"
+  #     - "traefik.http.routers.hls.tls.certresolver=le"
+  #     - "traefik.http.routers.hls.tls=true"
+  #     - "traefik.http.services.hls.loadbalancer.server.port=80"
 
   # background task management
 
@@ -190,9 +190,20 @@ services:
     restart: unless-stopped
     ports:
       - 8081:8081
+    networks:
+      - web
+      - default
     environment:
       ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/
-
+      ME_CONFIG_BASICAUTH_USERNAME: ${GRAFANA_USER}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${GRAFANA_PASS}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mongo.rule=Host(`mongoex.${DOMAIN}`)"
+      - "traefik.http.routers.mongo.entrypoints=websecure"
+      - "traefik.http.routers.mongo.tls.certresolver=le"
+      - "traefik.http.routers.mongo.tls=true"
+      - "traefik.http.services.mongo.loadbalancer.server.port=8081"
 
 
 
@@ -200,126 +211,126 @@ services:
   # https://dev.to/ruanbekker/setup-glitchtip-error-monitoring-on-docker-358
 
   
-  loki:
-    image: grafana/loki:master
-    container_name: loki
-    volumes:
-      - /data/volumes/loki:/data/loki
-      #- ${VOLUMES}:/loki
-    #   - ./grafana-stack/loki/config.yaml:/etc/loki/config.yaml
-    command: -config.file=/etc/loki/local-config.yaml
+  # loki:
+  #   image: grafana/loki:master
+  #   container_name: loki
+  #   volumes:
+  #     - /data/volumes/loki:/data/loki
+  #     #- ${VOLUMES}:/loki
+  #   #   - ./grafana-stack/loki/config.yaml:/etc/loki/config.yaml
+  #   command: -config.file=/etc/loki/local-config.yaml
 
-  promtail:
-    image: grafana/promtail:master
-    container_name: promtail
-    depends_on:
-        - loki
-    volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers
-      - /var/log:/var/log
-      - ./grafana-stack/promtail/config.yaml:/etc/promtail/config.yaml
-    command: -config.file=/etc/promtail/config.yaml
+  # promtail:
+  #   image: grafana/promtail:master
+  #   container_name: promtail
+  #   depends_on:
+  #       - loki
+  #   volumes:
+  #     - /var/lib/docker/containers:/var/lib/docker/containers
+  #     - /var/log:/var/log
+  #     - ./grafana-stack/promtail/config.yaml:/etc/promtail/config.yaml
+  #   command: -config.file=/etc/promtail/config.yaml
 
-  prometheus:
-    image: prom/prometheus:v2.7.1
-    container_name: prometheus
-    ports:
-        - "9090:9090"
-    volumes:
-      - ${VOLUMES}/prometheus:/prometheus/data
-      - ./grafana-stack/prometheus/config.yaml:/etc/prometheus/config.yaml
-    command: >-
-        --config.file=/etc/prometheus/config.yaml
-        --storage.tsdb.path=/prometheus
-        --web.console.libraries=/usr/share/prometheus/console_libraries
-        --web.console.templates=/usr/share/prometheus/consoles
+  # prometheus:
+  #   image: prom/prometheus:v2.7.1
+  #   container_name: prometheus
+  #   ports:
+  #       - "9090:9090"
+  #   volumes:
+  #     - ${VOLUMES}/prometheus:/prometheus/data
+  #     - ./grafana-stack/prometheus/config.yaml:/etc/prometheus/config.yaml
+  #   command: >-
+  #       --config.file=/etc/prometheus/config.yaml
+  #       --storage.tsdb.path=/prometheus
+  #       --web.console.libraries=/usr/share/prometheus/console_libraries
+  #       --web.console.templates=/usr/share/prometheus/consoles
 
-  grafana:
-    build: ./grafana-stack/grafana
-    container_name: grafana
-    depends_on:
-        - loki
-    volumes:
-      - ./grafana-stack/grafana/dashboards:/var/lib/grafana/dashboards
-    networks:
-      - web
-      - default
-    ports:
-      - "3000:3000"
-    expose:
-      - "3000"
-    environment:
-        GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
-        GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS}
-        #GF_SERVER_ROOT_URL: http://grafana:3000
-        GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
-        GF_FORCE_MIGRATION: 'true'
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
-      - "traefik.http.routers.grafana.entrypoints=websecure"
-      - "traefik.http.routers.grafana.tls.certresolver=le"
-      - "traefik.http.routers.grafana.tls=true"
-      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+  # grafana:
+  #   build: ./grafana-stack/grafana
+  #   container_name: grafana
+  #   depends_on:
+  #       - loki
+  #   volumes:
+  #     - ./grafana-stack/grafana/dashboards:/var/lib/grafana/dashboards
+  #   networks:
+  #     - web
+  #     - default
+  #   ports:
+  #     - "3000:3000"
+  #   expose:
+  #     - "3000"
+  #   environment:
+  #       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+  #       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS}
+  #       #GF_SERVER_ROOT_URL: http://grafana:3000
+  #       GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+  #       GF_FORCE_MIGRATION: 'true'
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
+  #     - "traefik.http.routers.grafana.entrypoints=websecure"
+  #     - "traefik.http.routers.grafana.tls.certresolver=le"
+  #     - "traefik.http.routers.grafana.tls=true"
+  #     - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
-  cadvisor:
-    #image: google/cadvisor:v0.33.0
-    image: gcr.io/cadvisor/cadvisor
-    container_name: prom_cadvisor
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-        #- /dev/disk/:/dev/disk:ro
+  # cadvisor:
+  #   #image: google/cadvisor:v0.33.0
+  #   image: gcr.io/cadvisor/cadvisor
+  #   container_name: prom_cadvisor
+  #   volumes:
+  #     - /:/rootfs:ro
+  #     - /var/run:/var/run:ro
+  #     - /sys:/sys:ro
+  #     - /var/lib/docker/:/var/lib/docker:ro
+  #       #- /dev/disk/:/dev/disk:ro
 
 
-  node-exporter:
-    image: prom/node-exporter:latest
-    container_name: prom_node_exporter
-    restart: unless-stopped
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+  # node-exporter:
+  #   image: prom/node-exporter:latest
+  #   container_name: prom_node_exporter
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /proc:/host/proc:ro
+  #     - /sys:/host/sys:ro
+  #     - /:/rootfs:ro
+  #   command:
+  #     - '--path.procfs=/host/proc'
+  #     - '--path.rootfs=/rootfs'
+  #     - '--path.sysfs=/host/sys'
+  #     - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
 
-  redis-exporter:
-    image: bitnami/redis-exporter:latest
-    container_name: prom_redis_exporter
-    restart: unless-stopped
-    depends_on:
-        - redis
-    environment:
-      REDIS_ADDR: redis://redis:6379
-
-  # mongo-exporter:
-  #   image: bitnami/mongodb-exporter:latest
-  #   command: --mongodb.uri=mongodb://mongo:27017
+  # redis-exporter:
+  #   image: bitnami/redis-exporter:latest
+  #   container_name: prom_redis_exporter
   #   restart: unless-stopped
   #   depends_on:
-  #       - mongo
+  #       - redis
   #   environment:
-  #     MONGODB_URL: mongodb://mongo:27017
+  #     REDIS_ADDR: redis://redis:6379
 
-  # nginx-exporter:
-  #   image: nginx/nginx-prometheus-exporter
+  # # mongo-exporter:
+  # #   image: bitnami/mongodb-exporter:latest
+  # #   command: --mongodb.uri=mongodb://mongo:27017
+  # #   restart: unless-stopped
+  # #   depends_on:
+  # #       - mongo
+  # #   environment:
+  # #     MONGODB_URL: mongodb://mongo:27017
+
+  # # nginx-exporter:
+  # #   image: nginx/nginx-prometheus-exporter
+  # #   restart: unless-stopped
+  # #   command: -nginx.scrape-uri=http://hls:8080/stub_status
+  # #   depends_on:
+  # #       - hls
+
+  # nginx-rtmp-exporter:
+  #   image: vtimofei/nginx_rtmp_prometheus:v0.2.1
+  #   container_name: prom_hls_exporter
   #   restart: unless-stopped
-  #   command: -nginx.scrape-uri=http://hls:8080/stub_status
+  #   command: --nginxrtmp.scrape-uri="http://hls/stat"
   #   depends_on:
   #       - hls
-
-  nginx-rtmp-exporter:
-    image: vtimofei/nginx_rtmp_prometheus:v0.2.1
-    container_name: prom_hls_exporter
-    restart: unless-stopped
-    command: --nginxrtmp.scrape-uri="http://hls/stat"
-    depends_on:
-        - hls
 
 
 networks:

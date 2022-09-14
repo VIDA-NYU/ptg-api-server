@@ -1,3 +1,4 @@
+import time
 import asyncio
 import io
 import itertools
@@ -98,7 +99,7 @@ async def get_data_entries(
 async def push_data_ws(
         ws: WebSocket,
         sid: str = PARAM_STREAM_ID,
-        batch:  bool | None = Query(False, description="set to 'true' if entries will be sent in batches (alternate one text, one bytes)"),
+        batch:  bool | None = Query(None, description="set to 'true' if entries will be sent in batches (alternate one text, one bytes)"),
         ack: bool | None = Query(False, description="set to 'true' if would like the server to respond to each entry/batch with inserted entry IDs"),
         parse_meta: bool=PARAM_PARSE_META):
     """
@@ -106,15 +107,32 @@ async def push_data_ws(
     if not (await UserAuth.authorizeWebSocket(ws)):
         return
     await ws.accept()
-    sids = itertools.repeat(sid)
+    
+    sids = None
+    if sid == '*':
+        assert batch
+    elif '+' in sid:
+        assert batch
+        sids = sid.split('+')
+    else:
+        sids = itertools.repeat(sid)
     try:
         while True:
-            if batch or sid=='*':
-                sids, offsets = zip(*orjson.loads(await ws.receive_text()))
-
+            ts = None
+            if batch:
+                offsets = orjson.loads(await ws.receive_text())
+                if offsets and isinstance(offsets[0], list):
+                    if len(offsets[0]) == 3:
+                        sids, ts, offsets = zip(*offsets)
+                    else:
+                        sids, offsets = zip(*offsets)
+                elif sids is None:
+                    raise ValueError("You must upload the sid with the offsets if using sid='*'")
             data = await ws.receive_bytes()
-            entries = [data[i:j] for i, j in zip(offsets, offsets[1:] + [None])] if batch else [data]
-            ts = get_ts(entries, parse_meta)
+            if not offsets or offsets[0] != 0:
+                offsets.append(0)  # 
+            entries = [data[i:j] for i, j in zip(offsets, offsets[1:])] if batch else [data]
+            ts = ts or get_ts(entries, parse_meta)
 
             res = await STREAM_STORE.add_entries(zip(sids, ts, entries))
             if ack:
@@ -130,6 +148,9 @@ async def pull_data_ws(
         count:  int | None = PARAM_COUNT,
         last_entry_id: str | None = PARAM_LAST_ENTRY_ID_BLOCK,
         time_sync_id:  int | str | None = PARAM_TIME_SYNC_ID,
+        latest: bool|None=Query(None, description="should we return all data points or just the latest? This is True unless you provide an absolute timestamp with last_entry_id"),
+        timeout: int|None=None,
+        rate_limit: float|None=Query(None, description="Rate limit the output of data (in seconds per iteration)."),
         input: str|None=PARAM_INPUT, output: str|None=PARAM_OUTPUT,
         ack: bool | None = Query(False, description="set to 'true' to wait for the client to send an acknowledgement message (of any content) before sending more data"),
     ):
@@ -139,11 +160,14 @@ async def pull_data_ws(
         return
     await ws.accept()
     try:
-        latest = last_entry_id is None or '$' in last_entry_id 
         if isinstance(time_sync_id, int):
             time_sync_id = sid.split('+')[time_sync_id]
         last = init_last(sid, last_entry_id)
-        cursor = MultiStreamCursor(last, latest=latest, time_sync_id=time_sync_id, block=10000)
+        latest = latest if latest is not None else (last_entry_id is None or '$' in last_entry_id or '-' in last_entry_id)
+        print(last, latest, flush=True)
+        cursor = MultiStreamCursor(last, latest=latest, time_sync_id=time_sync_id, block=timeout or 3000)
+        
+        tlast = time.time()
         while True:
             entries = await cursor.next()
             if entries:
@@ -154,6 +178,12 @@ async def pull_data_ws(
                 await ws.send_bytes(content)
                 if ack:
                     await ws.receive()
+                if rate_limit:
+                    tnow=time.time()
+                    time.sleep(max(0, rate_limit - (tnow - tlast)))
+                    tlast=tnow
+            elif timeout:
+                break
     except (WebSocketDisconnect, ConnectionClosed):
         pass
 
@@ -171,10 +201,12 @@ async def mjpeg_stream(sid, count, last_entry_id, time_sync_id, input):
 
 
 def init_last(sid, last_entry_id):
-    return dict(zip(
+    d = dict(zip(
         sid.split('+'),
         itertools.cycle(re.split('\\+| ', last_entry_id))
     ))
+    #d = {k: '-' if v == '.' else v for k, v in d.items()}
+    return d
 
 def update_last(last, entries, time_sync_id=None):
     # use one stream id as time keeper

@@ -31,6 +31,10 @@ async def get_all_sessions():
 async def get_recipe(info: bool | None = Query(False, description="set to 'true' to return recipe metadata as well")):
     return await session.current_recipe(info=info or False)
 
+@router.get('/id', summary='Get current session id')
+async def get_session_id():
+    return await session.current_session_id()
+
 @router.put('/recipe/{recipe_id}', summary='Start recipe')
 async def start_recipe(recipe_id: str = Query(None, description="set the current recipe")):
     return await session.start_recipe(recipe_id)

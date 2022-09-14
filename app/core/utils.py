@@ -16,9 +16,9 @@ def format_ts(dt: datetime.datetime):
     '''Format a redis timestamp from a datetime object.'''
     return format_epoch_ts(dt.timestamp())
 
-def format_epoch_ts(tid: float):
+def format_epoch_ts(tid: float, i='0'):
     '''Format a redis timestamp from epoch seconds.'''
-    return f'{int(tid * 1000)}-0'
+    return f'{int(tid * 1000)}-{i}'
 
 def redis_id_to_iso(rid):
     '''Convert a redis timestamp to a iso format.'''

@@ -16,7 +16,7 @@ router = APIRouter(tags=get_tag_names(tags))
 
 @router.post('/token', response_model=Token,
              summary='Receive a bearer token as part of OAuth2')
-async def authenticate(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
+async def authenticate(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), exp: int=None):
     ua = UserAuth()
     if not ua.authenticate(form_data.username, form_data.password):
         raise HTTPException(
@@ -25,9 +25,11 @@ async def authenticate(response: Response, form_data: OAuth2PasswordRequestForm 
             headers={'WWW-Authenticate': 'Bearer'},
         )
     token = ua.createToken()
+    max_exp = 60*(ACCESS_TOKEN_EXPIRE_MINUTES - 1)
+    exp = min(exp or max_exp, max_exp)
     response.set_cookie(
         "authorization", f"Bearer {token['access_token']}", 
-        httponly=True, max_age=60*(ACCESS_TOKEN_EXPIRE_MINUTES - 1))
+        httponly=True, max_age=exp)
     #print(response.cookies.get('authorization'))
     return token
 

@@ -4,7 +4,7 @@ import orjson
 from collections import defaultdict
 from typing import Awaitable
 from app.context import Context
-from app.core.utils import redis_id_to_iso,  parse_epoch_time
+from app.core.utils import redis_id_to_iso,  parse_epoch_time, format_epoch_ts
 
 ctx = Context.instance()
 
@@ -29,7 +29,7 @@ class Streams:
     META_PREFIX = 'XMETA'
     MAXLEN = ctx.config['default_max_len']
     async def list_streams(self):
-        return [x.decode('utf-8') async for x in ctx.redis.scan_iter(_type='stream')]
+        return sorted([x.decode('utf-8') async for x in ctx.redis.scan_iter(_type='stream')])
 
     async def list_stream_info(self, sids=None):
         if sids is None:
@@ -63,16 +63,20 @@ class Streams:
 
     async def delete_stream(self, sid):
         async with ctx.redis.pipeline() as pipe:
-            pipe.delete(f'{self.META_PREFIX}:{sid}')
-            pipe.xtrim(sid, 0, approximate=False)
+            for sid in sid.split('+'):
+                pipe.delete(f'{self.META_PREFIX}:{sid}')
+                pipe.xtrim(sid, 0, approximate=False)
+                pipe.delete(sid)
             return await pipe.execute()
 
     @staticmethod
-    async def add_entries(entries: list):
+    async def add_entries(entries: list, include_static_key=False):
         maxlen = ctx.config['default_max_len']
         async with ctx.redis.pipeline() as pipe:
             for sid, ts, data in entries:
                 pipe.xadd(sid, {b'd': data}, ts or '*', maxlen=maxlen, approximate=True)
+                if include_static_key:
+                    pipe.set(sid, data)
             res = await pipe.execute()
         return res
 
@@ -107,19 +111,24 @@ def maybe_utf_decode(txt):
     return txt.decode('utf-8') if isinstance(txt, bytes) else txt
 
 class MultiStreamCursor:
-    def __init__(self, last, latest=True, block=10000, time_sync_id=None, redis=None):
+    def __init__(self, last, latest=True, block=10000, time_sync_id=None, replace_dollar=True, redis=None):
         self.r = ctx.redis if redis is None else redis
-        self.last = {maybe_utf_encode(sid): t for sid, t in last.items()}
+        tnow = format_epoch_ts(time.time())
+        self.last = {
+            maybe_utf_encode(sid): tnow if replace_dollar and t == '$' else t
+            for sid, t in last.items()
+        }
         self.latest = latest
         self.block = block
         self.time_sync_id = maybe_utf_encode(time_sync_id)
+        print("Stream Cursor:", self.last, self.latest,  self.block, flush=True)
 
     async def next(self, **kw):
         # query next value
         result = await (self.next_latest(**kw) if self.latest else self.next_consecutive(**kw))
         # update to the latest timestamp
         for sid, ts in result:
-            self.last[sid] = max((t for t, _ in ts), default=self.last)
+            self.last[sid] = max((t for t, _ in ts), default=self.last[sid])
         if self.time_sync_id:
             main_ts = self.last[self.time_sync_id]
             for sid in self.last:
@@ -146,7 +155,8 @@ class MultiStreamCursor:
         result = await self._next_latest(**kw)
         if result:
             return result
-        return await self.next_consecutive(**kw)
+        result = await self.next_consecutive(**kw)
+        return result
 
     async def _next_latest(self, sids=None, count=1):
         sids = sids or self.last
@@ -155,15 +165,18 @@ class MultiStreamCursor:
         async with self.r.pipeline() as p:
             for s in sids:
                 l = maybe_utf_decode(self.last[s])
-                p.xrevrange(s, '+', f'({l}' if l != '$' else '-', count=count)
+                if l == '$':
+                    self.last[s] = l = format_epoch_time(start_time)
+                p.xrevrange(s, '+', f'({l}' if l != '-' else '-', count=count)
+            return [(s, x) for s, x in zip(sids, await p.execute()) if x]
             # if we use $, filter out any timestamps before the start time (since xrevrange doesn't actually support $)
             # also filter out empty stream IDs
-            return [
-                (s, r) for s, r in (
-                    (s, [(ts, x) for ts, x in r if parse_epoch_time(ts) > start_time] if self.last[s] == '$' else r) 
-                    for s, r in zip(sids, await p.execute()) 
-                ) if r
-            ]
+            #return [
+            #    (s, r) for s, r in (
+            #        (s, [(ts, x) for ts, x in r if parse_epoch_time(ts) > start_time] if self.last[s] == '$' else r) 
+            #        for s, r in zip(sids, await p.execute()) 
+            #    ) if r
+            #]
 
 
     async def next_consecutive(self, count=1):

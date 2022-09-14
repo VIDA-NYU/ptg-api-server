@@ -17,19 +17,47 @@ RECORDING_PATH = os.getenv("RECORDING_PATH") or '/data/recordings'
 RECORDING_RAW_PATH = os.path.join(RECORDING_PATH, 'raw')
 RECORDING_POST_PATH = os.path.join(RECORDING_PATH, 'post')
 
+STREAM_STORE = Streams()
+
 
 ctx = Context.instance()
 
 fglob = lambda *fs: glob.glob(os.path.join(*fs))
 
+def safe_listdir(d):
+    return os.listdir(d) if os.path.exists(d) else []
+
 class Recordings:
     recording_id_key='recording:id'
+    SID = 'event:recording:id'
     def list_recordings(self):
         fs = fglob(RECORDING_RAW_PATH, '*')
         return [os.path.basename(f) for f in fs]
 
-    def list_recording_info(self):
+    async def list_recording_info(self, cache=True):
+        if cache:
+            async with ctx.redis.pipeline() as pipe:
+                recordings = self.list_recordings()
+                for rid in recordings:
+                    pipe.get(f'recording:info:{rid}')
+                infos = await pipe.execute()
+                for i, (rid, x) in enumerate(zip(recordings, infos)):
+                    if not x:
+                        infos[i] = x = self.get_recording_info(rid)
+                        if x['last-entry'] and (time.time() - parse_epoch_ts(x['last-entry'])) > 3 * 60:
+                            pipe.set(f'recording:info:{rid}', orjson.dumps(x))
+                    else:
+                        infos[i] = x = orjson.loads(x)
+                        x['_cached'] = True
+                await pipe.execute()
+                return infos
         return [self.get_recording_info(rid) for rid in self.list_recordings()]
+
+    async def clear_recording_info_cache(self):
+        async with ctx.redis.pipeline() as pipe:
+            for rid in self.list_recordings():
+                pipe.delete(f'recording:info:{rid}')
+                return await pipe.execute()
 
     async def get_current_recording(self, info=False):
         rid = await ctx.redis.get(self.recording_id_key)
@@ -39,6 +67,8 @@ class Recordings:
         return rid
 
     def get_recording_info(self, rec_id):
+        if rec_id == 'undefined':
+            return {"warning": "recording id is undefined"}  # 
         stream_dirs = fglob(RECORDING_RAW_PATH, rec_id, '*')
         streams = [os.path.basename(f) for f in stream_dirs]
         stream_info = {k: self.get_stream_info(rec_id, k) for k in streams}
@@ -51,7 +81,7 @@ class Recordings:
                 for sid, d in stream_info.items()
                 if not sid.endswith('Cal')
             ))),
-            "files": os.listdir(os.path.join(RECORDING_POST_PATH, rec_id)),
+            "files": safe_listdir(os.path.join(RECORDING_POST_PATH, rec_id)),
         }
 
     def get_stream_info(self, rec_id, name):
@@ -68,8 +98,10 @@ class Recordings:
     def first_last_times(self, firsts=None, lasts=None):
         first = min((t for t in firsts or () if t), default=None)
         last = max((t for t in lasts or () if t), default=None)
+        duration = datetime.timedelta(seconds=parse_epoch_ts(last) - parse_epoch_ts(first)) if first and last else None
         return {
-            "duration": str(datetime.timedelta(seconds=parse_epoch_ts(last) - parse_epoch_ts(first))) if first and last else None,
+            "duration": str(duration) if duration else None,
+            "duration_secs": duration.total_seconds() if duration else None,
             "first-entry": first,
             "last-entry": last,
             "first-entry-time": parse_ts(first).strftime("%c") if first else None,
@@ -85,10 +117,13 @@ class Recordings:
         is_set = await ctx.redis.set(self.recording_id_key, rec_id)
         if not is_set:
             raise RuntimeError(f"Recording {rec_id} didn't start.")
+        await STREAM_STORE.add_entries([(self.SID, None, rec_id.encode('utf-8'))])
         return rec_id
 
     async def stop(self):
-        return await ctx.redis.delete(self.recording_id_key)
+        x = await ctx.redis.delete(self.recording_id_key)
+        await STREAM_STORE.add_entries([(self.SID, None, ''.encode('utf-8'))])
+        return x
 
     def rename_recording(self, old_name, new_name):
         raw_old_path = safe_subdir(RECORDING_RAW_PATH, old_name)
@@ -132,6 +167,8 @@ class RecordingPlayer:
         self.done = asyncio.Event()
         self.active = set()
         self.counter = defaultdict(int)
+        self.durations = {}
+        self.t_current = {}
 
     def clear_counter(self):
         self.counter.clear()
@@ -140,7 +177,12 @@ class RecordingPlayer:
         self.counter[sid] += 1
 
     def get_progress_json(self):
-        progress = {'updates': list(self.counter.items()), 'active': list(self.active)}
+        progress = {
+            'updates': dict(self.counter), 
+            'active': list(self.active),
+            'durations': self.durations,
+            'current': self.t_current,
+        }
         return orjson.dumps(progress).decode('utf-8')
 
     def is_done(self):
@@ -159,6 +201,10 @@ class RecordingPlayer:
         except (WebSocketDisconnect, ConnectionClosed):
             pass
         finally:
+            try:
+                await ws.send_text(self.get_progress_json())
+            except (WebSocketDisconnect, ConnectionClosed):
+                pass
             self.done.set()
 
     async def replay_stream(self, rec_id, prefix, name, fullspeed):
@@ -174,12 +220,21 @@ class RecordingPlayer:
 
         sid = f'{prefix}{name}'
         fs = sorted(fglob(RECORDING_RAW_PATH, rec_id, name, '*'))
+
+        firsts, lasts = tuple(zip(*(
+            os.path.splitext(os.path.basename(f))[0].split('_')
+            for f in fs
+        ))) or ((),())
+        first = parse_epoch_ts(min((t for t in firsts or () if t), default='0-0'))
+        last = parse_epoch_ts(max((t for t in lasts or () if t), default='0-0'))
+        self.durations[name] = last-first
         last = None
         try:
             for fname in fs:
                 with open(fname, 'rb') as f:
                     for ts, data in _unzip(f.read()):
                         t = parse_epoch_ts(ts)
+                        self.t_current[name] = t-first
                         timeout = 0
                         if not fullspeed:
                             now = (t, time.time())
@@ -190,7 +245,7 @@ class RecordingPlayer:
                         if self.is_done():
                             return
                         last = (t, time.time())
-                        await Streams.add_entries(((sid, format_epoch_ts(last[1]), data),))
+                        await Streams.add_entries(((sid, format_epoch_ts(last[1], '*'), data),))
                         self.update_counter(name)
         finally:
             self.set_inactive(name)

@@ -6,22 +6,24 @@ help: ## PTG API Server
 
 
 
-full: https services ml  ## bring the full system up
+full: https services ml dash  ## bring the full system up
 
 https:  ## bring up the https reverse proxy
 	docker-compose -f docker-compose.https.yaml up -d --build
 
-services: build-ptgctl  ## bring just the services up
+services: base  ## bring just the services up
 	docker-compose up -d --build
 
-ml: build-ptgctl  ## bring up the machine learning containers
-	cd ptg-server-ml && docker-compose up -d --build && cd -
+record: base  ## bring up the recording containers
+	cd ptg-server-ml && docker-compose -f docker-compose.record.yaml up -d --build && cd -
 
 dash:  ## bring up the dashboard containers
 	cd tim-dashboard && ls && docker-compose --env-file ../.env -f docker-compose.prod.yml up -d --build && cd -
 
-build-ptgctl:  ## build the ptgctl container
+base:  ## build the ptgctl container
+	cp .env ptg-server-ml/.env
 	docker build -t ptgctl -t ptgctl:latest ./ptgctl
+	docker build -t ptgprocess -t ptgprocess:latest ./ptg-server-ml
 
 pull:
 	git pull --recurse-submodules

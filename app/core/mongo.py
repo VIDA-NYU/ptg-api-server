@@ -13,7 +13,7 @@ class DB:
 
     def prepare_query(self, _id: str=None, **query):
         if _id:
-            query['_id'] = ObjectId(_id)
+            query['_id'] = _id#ObjectId(_id)
         return query
 
     def process(self, data):

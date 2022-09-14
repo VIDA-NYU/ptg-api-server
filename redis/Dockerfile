@@ -11,7 +11,7 @@ WORKDIR /opt/redislabs/lib/modules/python3
 
 ADD ./requirements.txt /tmp/requirements.txt
 RUN pipenv run pip install -r /tmp/requirements.txt
-ADD ./redisdocker.conf /usr/local/etc/redisedge.conf
+ADD ./redis_6789.conf /usr/local/etc/redisedge.conf
 
 # ADD init.py .
 # RUN mkdir -p /app

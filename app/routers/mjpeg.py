@@ -68,7 +68,7 @@ async def mjpeg_stream(sid, count, last_entry_id, time_sync_id, input):
 
     last = init_last(sid, last_entry_id)
     while True:
-        entries = await STREAM_STORE.get_entries(last, count, block=10000)
+        entries = await STREAM_STORE.get_entries(last, count, block=3000)
         if not entries:
             yield _toframe(placeholder_frame)
             continue

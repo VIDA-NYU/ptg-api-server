@@ -168,6 +168,15 @@ class NV12(Image):
     def dump(self, im: np.ndarray):
         return super().dump(bgr2nv12(im))
 
+@registry.register
+class Null(Converter):
+    '''Drop the data, basically.'''
+    def load(self, data):
+        return np.array(())
+
+    def dump(self, im):
+        return b''
+
 
 # # register data formats
 registry.variant('nv12', 'pv')
