@@ -5,7 +5,7 @@
     "redis": {
         "connection": {
             "url": "redis://127.0.0.1:6789",
-            "max_connections": 100
+            "max_connections": 9000
         },
         "meta_key": "ptg-dev"
     },
