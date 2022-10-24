@@ -121,7 +121,6 @@ class MultiStreamCursor:
         self.latest = latest
         self.block = block
         self.time_sync_id = maybe_utf_encode(time_sync_id)
-        print("Stream Cursor:", self.last, self.latest,  self.block, flush=True)
 
     async def next(self, **kw):
         # query next value
