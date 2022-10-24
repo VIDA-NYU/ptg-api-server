@@ -6,6 +6,7 @@ import orjson
 import os
 import time
 import shutil
+import zipfile
 from app.context import Context
 from app.core.streams import Streams
 from app.core.utils import parse_epoch_ts, parse_ts, format_epoch_ts
@@ -34,44 +35,52 @@ class Recordings:
         fs = fglob(RECORDING_RAW_PATH, '*')
         return [os.path.basename(f) for f in fs]
 
-    async def list_recording_info(self, cache=True):
+    async def list_recording_info(self, *recordings, cache=True):
         if cache:
             async with ctx.redis.pipeline() as pipe:
-                recordings = self.list_recordings()
+                recordings = recordings or self.list_recordings()
                 for rid in recordings:
                     pipe.get(f'recording:info:{rid}')
                 infos = await pipe.execute()
                 for i, (rid, x) in enumerate(zip(recordings, infos)):
                     if not x:
-                        infos[i] = x = self.get_recording_info(rid)
-                        if x['last-entry'] and (time.time() - parse_epoch_ts(x['last-entry'])) > 3 * 60:
+                        infos[i] = x = self._get_recording_info(rid)
+                        if x['last-entry'] and (time.time() - parse_epoch_ts(x['last-entry'])) > 30 * 60:
                             pipe.set(f'recording:info:{rid}', orjson.dumps(x))
                     else:
                         infos[i] = x = orjson.loads(x)
                         x['_cached'] = True
                 await pipe.execute()
                 return infos
-        return [self.get_recording_info(rid) for rid in self.list_recordings()]
+        else:
+            await self.clear_recording_info_cache()
+        return [await self._get_recording_info(rid) for rid in self.list_recordings()]
 
-    async def clear_recording_info_cache(self):
+    async def clear_recording_info_cache(self, *rec_ids):
         async with ctx.redis.pipeline() as pipe:
-            for rid in self.list_recordings():
+            rec_ids = rec_ids or self.list_recordings()
+            for rid in rec_ids:
                 pipe.delete(f'recording:info:{rid}')
-                return await pipe.execute()
+            return dict(zip(rec_ids, await pipe.execute()))
 
     async def get_current_recording(self, info=False):
         rid = await ctx.redis.get(self.recording_id_key)
         rid = rid.decode('utf-8') if rid else rid
         if info:
-            return self.get_recording_info(rid) if rid else None
+            return await self.get_recording_info(rid) if rid else None
         return rid
 
-    def get_recording_info(self, rec_id):
+    async def get_recording_info(self, rec_id, cache=True):
+        return (await self.list_recording_info(rec_id, cache=cache))[0]
+
+    def _get_recording_info(self, rec_id):
         if rec_id == 'undefined':
             return {"warning": "recording id is undefined"}  # 
         stream_dirs = fglob(RECORDING_RAW_PATH, rec_id, '*')
         streams = [os.path.basename(f) for f in stream_dirs]
-        stream_info = {k: self.get_stream_info(rec_id, k) for k in streams}
+        stream_info = dict(
+            self.get_stream_info(rec_id, k) 
+            for k in streams)
         return {
             "name": rec_id, 
             "streams": stream_info,
@@ -84,9 +93,21 @@ class Recordings:
             "files": safe_listdir(os.path.join(RECORDING_POST_PATH, rec_id)),
         }
 
-    def get_stream_info(self, rec_id, name):
-        fs = sorted(fglob(RECORDING_RAW_PATH, rec_id, name, '*'))
-        return {
+    def get_stream_info(self, rec_id, name, include_zips=False):
+        f = os.path.join(RECORDING_RAW_PATH, rec_id, name)
+        print(f,  flush=True)
+        if os.path.isfile(f'{f}.zip'):
+            f = f'{f}.zip'
+            name = f'{name}.zip'
+        if f.endswith('.zip'):
+            if os.path.isfile(f):
+                name, info = name.removesuffix('.zip'), self.get_zip_stream_info(rec_id, name)
+            if include_zips:
+                info['zips'] = [f]
+            return name, info
+
+        fs = sorted(fglob(f, '*'))
+        info = {
             "chunk_count": len(fs),
             "size_mb": sum(os.path.getsize(f) / (1024.**2) for f in fs),
             **self.first_last_times(*zip(*(
@@ -94,6 +115,24 @@ class Recordings:
                 for f in fs
             ))),
         }
+        if include_zips:
+            info['zips'] = fs
+        return name, info
+
+    def get_zip_stream_info(self, rec_id, name):
+        f = os.path.join(RECORDING_RAW_PATH, rec_id, name)
+        d = {
+            "chunk_count": None,
+            "size_mb": os.path.getsize(f),
+        }
+        try:
+            with zipfile.ZipFile(f, 'r') as zf:
+                ts = zf.namelist()
+        except Exception as e:
+            d['error'] = str(e)
+            ts = []
+        d.update(self.first_last_times(ts, ts))
+        return d
 
     def first_last_times(self, firsts=None, lasts=None):
         first = min((t for t in firsts or () if t), default=None)
@@ -219,15 +258,12 @@ class RecordingPlayer:
                         yield ts, data
 
         sid = f'{prefix}{name}'
-        fs = sorted(fglob(RECORDING_RAW_PATH, rec_id, name, '*'))
-
-        firsts, lasts = tuple(zip(*(
-            os.path.splitext(os.path.basename(f))[0].split('_')
-            for f in fs
-        ))) or ((),())
-        first = parse_epoch_ts(min((t for t in firsts or () if t), default='0-0'))
-        last = parse_epoch_ts(max((t for t in lasts or () if t), default='0-0'))
-        self.durations[name] = last-first
+        sid, info = Recordings().get_stream_info(rec_id, name, include_zips=True)
+        first, last = parse_epoch_ts(info['first-entry']), parse_epoch_ts(info['last-entry'])
+        self.durations[name] = info['duration_secs']
+        fs = info['zips']
+        sid = f'{prefix}{sid}'
+        print(f"replaying {rec_id}/{name} to {sid} {self.durations[name]}", fs, flush=True)
         last = None
         try:
             for fname in fs:
@@ -252,9 +288,14 @@ class RecordingPlayer:
 
     async def replay(self, ws, rec_id, prefix, sids, fullspeed, update_interval=1):
         self.active = set(sids)
+        assert all(
+            os.path.isdir(os.path.join(RECORDING_RAW_PATH, rec_id, s)) or 
+            os.path.isfile(os.path.join(RECORDING_RAW_PATH, rec_id, f'{s}.zip'))
+            for s in sids)
         await asyncio.gather(self.replay_progress(ws, update_interval),
                              *(self.replay_stream(rec_id, prefix, name, fullspeed)
                                for name in self.active))
+
 
 # class Recordings:
 #     def __init__(self) -> None:

@@ -30,13 +30,13 @@ PARAM_NEW_RECORDING_ID = Path(description='The new ID of the recording.')
 @router.get('/', summary='List recordings')
 async def list_recordings(info: bool | None = PARAM_INFO, cache: bool=True):
     if info:
-        return await RECORDINGS.list_recording_info()
+        return await RECORDINGS.list_recording_info(cache=cache)
     return RECORDINGS.list_recordings()
 
 
 @router.delete('/cache', summary='cache recording info cache')
 async def clear_recording_info_cache():
-    return await RECORDINGS.clear_recording_info_cache(info=info)
+    return await RECORDINGS.clear_recording_info_cache()
 
 @router.get('/current', summary='Get current recording info')
 async def get_current_recording_info(info: bool | None = PARAM_INFO):
@@ -45,7 +45,7 @@ async def get_current_recording_info(info: bool | None = PARAM_INFO):
 
 @router.get('/{recording_id}', summary='Get recording info')
 async def get_recording_info(recording_id: str = PARAM_RECORDING_ID):
-    return RECORDINGS.get_recording_info(recording_id)
+    return await RECORDINGS.get_recording_info(recording_id)
 
 
 
