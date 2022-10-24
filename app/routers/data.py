@@ -130,7 +130,7 @@ async def push_data_ws(
                     raise ValueError("You must upload the sid with the offsets if using sid='*'")
             data = await ws.receive_bytes()
             if not offsets or offsets[0] != 0:
-                offsets.append(0)  # 
+                offsets = (0,)+tuple(offsets)
             entries = [data[i:j] for i, j in zip(offsets, offsets[1:])] if batch else [data]
             ts = ts or get_ts(entries, parse_meta)
 
@@ -150,6 +150,7 @@ async def pull_data_ws(
         time_sync_id:  int | str | None = PARAM_TIME_SYNC_ID,
         latest: bool|None=Query(None, description="should we return all data points or just the latest? This is True unless you provide an absolute timestamp with last_entry_id"),
         timeout: int|None=None,
+        onebyone: bool=False,
         rate_limit: float|None=Query(None, description="Rate limit the output of data (in seconds per iteration)."),
         input: str|None=PARAM_INPUT, output: str|None=PARAM_OUTPUT,
         ack: bool | None = Query(False, description="set to 'true' to wait for the client to send an acknowledgement message (of any content) before sending more data"),
@@ -171,17 +172,19 @@ async def pull_data_ws(
         while True:
             entries = await cursor.next()
             if entries:
-                if output:
-                    entries = convert_entries(entries, output, input)
-                offsets, content = pack_entries(entries)
-                await ws.send_text(offsets)
-                await ws.send_bytes(content)
-                if ack:
-                    await ws.receive()
-                if rate_limit:
-                    tnow=time.time()
-                    time.sleep(max(0, rate_limit - (tnow - tlast)))
-                    tlast=tnow
+                entries_batch = [[x] for x in entries] if onebyone else [entries]
+                for entries in entries_batch:
+                    if output:
+                        entries = convert_entries(entries, output, input)
+                    offsets, content = pack_entries(entries)
+                    await ws.send_text(offsets)
+                    await ws.send_bytes(content)
+                    if ack:
+                        await ws.receive()
+                    if rate_limit:
+                        tnow=time.time()
+                        time.sleep(max(0, rate_limit - (tnow - tlast)))
+                        tlast=tnow
             elif timeout:
                 break
     except (WebSocketDisconnect, ConnectionClosed):
