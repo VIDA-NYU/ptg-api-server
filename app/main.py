@@ -8,10 +8,10 @@ from starlette_exporter import PrometheusMiddleware, handle_metrics
 from app.context import Context
 from app.core.recordings import RECORDING_POST_PATH, RECORDING_RAW_PATH
 from app.static import AuthStaticFiles
-from app.routers import data, misc, streams, recipes, session, recording, mjpeg
+from app.routers import data, misc, streams, recipes, session, sessions, recording, mjpeg
 
 ctx = Context.instance()
-routers = [misc, streams, data, recipes, session, recording, mjpeg]
+routers = [misc, streams, data, recipes, session, sessions, recording, mjpeg]
 tags = [t for r in routers for t in r.tags]
 
 app = FastAPI(title=ctx.config['title'],
