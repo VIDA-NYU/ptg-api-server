@@ -7,6 +7,7 @@ import os
 import time
 import shutil
 import zipfile
+import redis
 from app.context import Context
 from app.core.streams import Streams
 from app.core.utils import parse_epoch_ts, parse_ts, format_epoch_ts
@@ -17,6 +18,13 @@ from websockets.exceptions import ConnectionClosed
 RECORDING_PATH = os.getenv("RECORDING_PATH") or '/data/recordings'
 RECORDING_RAW_PATH = os.path.join(RECORDING_PATH, 'raw')
 RECORDING_POST_PATH = os.path.join(RECORDING_PATH, 'post')
+RECORDING_RAW_HIDDEN_PATH = os.path.join(RECORDING_PATH, 'raw_hidden')
+RECORDING_POST_HIDDEN_PATH = os.path.join(RECORDING_PATH, 'post_hidden')
+
+os.makedirs(RECORDING_RAW_PATH, exist_ok=True)
+os.makedirs(RECORDING_POST_PATH, exist_ok=True)
+os.makedirs(RECORDING_RAW_HIDDEN_PATH, exist_ok=True)
+os.makedirs(RECORDING_POST_HIDDEN_PATH, exist_ok=True)
 
 STREAM_STORE = Streams()
 
@@ -33,7 +41,7 @@ class Recordings:
     SID = 'event:recording:id'
     def list_recordings(self):
         fs = fglob(RECORDING_RAW_PATH, '*')
-        return [os.path.basename(f) for f in fs]
+        return sorted([os.path.basename(f) for f in fs])
 
     async def list_recording_info(self, *recordings, cache=True):
         if cache:
@@ -165,19 +173,8 @@ class Recordings:
         return x
 
     def rename_recording(self, old_name, new_name):
-        raw_old_path = safe_subdir(RECORDING_RAW_PATH, old_name)
-        raw_new_path = safe_subdir(RECORDING_RAW_PATH, new_name)
-        if os.path.exists(raw_new_path):
-            raise OSError(f"Recording {new_name} already exists!")
-        if os.path.exists(raw_old_path):
-            os.rename(raw_old_path, raw_new_path)
-        print(os.path.exists(raw_old_path), raw_old_path, raw_new_path, flush=True)
-
-        post_old_path = safe_subdir(RECORDING_POST_PATH, old_name)
-        post_new_path = safe_subdir(RECORDING_POST_PATH, new_name)
-        if os.path.exists(post_old_path):
-            os.rename(post_old_path, post_new_path)
-        print(os.path.exists(post_old_path), post_old_path, post_new_path, flush=True)
+        raw_old_path, raw_new_path = safe_move(RECORDING_RAW_PATH, old_name, new_name)
+        post_old_path, post_new_path = safe_move(RECORDING_POST_PATH, old_name, new_name)
         return os.path.exists(raw_new_path), not os.path.exists(raw_old_path)
 
     def delete_recording(self, name):
@@ -188,6 +185,32 @@ class Recordings:
         if os.path.exists(post_path):
             shutil.rmtree(post_path)
         return not os.path.exists(raw_path), not os.path.exists(post_path)
+
+    def hide_recording(self, name):
+        raw_old_path, raw_new_path = safe_move(
+            RECORDING_RAW_PATH, name, name, RECORDING_RAW_HIDDEN_PATH)
+        post_old_path, post_new_path = safe_move(
+            RECORDING_POST_PATH, name, name, RECORDING_POST_HIDDEN_PATH)
+        return os.path.exists(raw_new_path), not os.path.exists(raw_old_path)
+
+    def unhide_recording(self, name):
+        raw_old_path, raw_new_path = safe_move(
+            RECORDING_RAW_HIDDEN_PATH, name, name, RECORDING_RAW_PATH)
+        post_old_path, post_new_path = safe_move(
+            RECORDING_POST_HIDDEN_PATH, name, name, RECORDING_POST_PATH)
+        return os.path.exists(raw_new_path), not os.path.exists(raw_old_path)
+
+
+def safe_move(root, old, new, new_root=None, data_name='Recording', verbose=False):
+    old_path = safe_subdir(root, old)
+    new_path = safe_subdir(new_root or root, new)
+    if os.path.exists(new_path):
+        raise OSError(f"{data_name} {new} already exists!")
+    if os.path.exists(old_path):
+        os.rename(old_path, new_path)
+    if verbose:
+        print(os.path.exists(old_path), old_path, new_path, flush=True)
+    return old_path, new_path
 
 
 def safe_subdir(root, name):
@@ -281,7 +304,12 @@ class RecordingPlayer:
                         if self.is_done():
                             return
                         last = (t, time.time())
-                        await Streams.add_entries(((sid, format_epoch_ts(last[1], '*'), data),))
+                        try:
+                            await Streams.add_entries(((sid, format_epoch_ts(last[1], '*'), data),))
+                        except redis.exceptions.ResponseError:
+                            import traceback
+                            traceback.print_exc()
+                            continue
                         self.update_counter(name)
         finally:
             self.set_inactive(name)

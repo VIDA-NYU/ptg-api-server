@@ -65,6 +65,14 @@ async def rename_recording(recording_id: str = PARAM_RECORDING_ID, new_id: str=P
 async def delete_recording(recording_id: str = PARAM_RECORDING_ID):
     return RECORDINGS.delete_recording(recording_id)
 
+@router.put('/{recording_id}/hide', summary='hide recording')
+async def hide_recording(recording_id: str = PARAM_RECORDING_ID):
+    return RECORDINGS.hide_recording(recording_id)
+
+@router.put('/{recording_id}/unhide', summary='unhide recording')
+async def unhide_recording(recording_id: str = PARAM_RECORDING_ID):
+    return RECORDINGS.unhide_recording(recording_id)
+
 
 @router.websocket('/replay')
 async def replay_recording(
