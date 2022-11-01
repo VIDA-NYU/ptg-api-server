@@ -72,6 +72,18 @@ services:
   #   restart: unless-stopped
   #   logging: *lokilogging
 
+  # label_studio:
+  #   image: heartexlabs/label-studio:latest
+  #   container_name: label_studio
+  #   volumes:
+  #     - ${VOLUMES}/label-studio:/label-studio/data
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.label.rule=Host(`label.${DOMAIN}`)"
+  #     - "traefik.http.routers.label.entrypoints=websecure"
+  #     - "traefik.http.routers.label.tls.certresolver=le"
+  #     - "traefik.http.routers.label.tls=true"
+  #     - "traefik.http.services.label.loadbalancer.server.port=8080"
 
   # Data Storage
 
