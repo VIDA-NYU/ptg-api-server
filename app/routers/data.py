@@ -138,7 +138,9 @@ async def push_data_ws(
             if ack:
                 await ws.send_text(','.join(x.decode('utf-8') for x in res))
     except (WebSocketDisconnect, ConnectionClosed):
-        pass
+        import traceback
+        traceback.print_exc()
+        print("(WebSocketDisconnect, ConnectionClosed)")
 
 
 @router.websocket('/{stream_id}/pull')

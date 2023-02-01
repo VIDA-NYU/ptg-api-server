@@ -22,8 +22,8 @@ dash:  ## bring up the dashboard containers
 
 base:  ## build the ptgctl container
 	cp .env ptg-server-ml/.env
-	docker build -t ptgctl -t ptgctl:latest ./ptgctl
-	docker build -t ptgprocess -t ptgprocess:latest ./ptg-server-ml
+	#docker build -t ptgctl -t ptgctl:latest ./ptgctl
+	#docker build -t ptgprocess -t ptgprocess:latest ./ptg-server-ml
 
 pull:
 	git pull --recurse-submodules

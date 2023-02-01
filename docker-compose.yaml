@@ -105,17 +105,17 @@ services:
       retries: 5
     logging: *lokilogging
 
-  # a dashboard to view redis
-  redisinsight:
-    image: redislabs/redisinsight:latest
-    container_name: redisinsight
-    restart: unless-stopped
-    depends_on:
-      - redis
-    ports:
-      - '8035:8001'
-    # volumes:
-    #   - ./redisinsight:/db 
+  # # a dashboard to view redis
+  # redisinsight:
+  #   image: redislabs/redisinsight:latest
+  #   container_name: redisinsight
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - redis
+  #   ports:
+  #     - '8035:8001'
+  #   # volumes:
+  #   #   - ./redisinsight:/db 
 
   # redisinsight_init:
   #   image: curlimages/curl
@@ -201,7 +201,7 @@ services:
     container_name: mongo_express
     restart: unless-stopped
     ports:
-      - 8081:8081
+      - 8034:8081
     networks:
       - web
       - default
@@ -346,8 +346,8 @@ services:
 
 
 networks:
-  #default:
-  #  name: ptg
+  default:
+    name: ptg
   web:
     external: true
     name: web
