@@ -1,0 +1,181 @@
+# # Default values for directus.
+# # This is a YAML-formatted file.
+# # Declare variables to be passed into your templates.
+
+# replicaCount: 1
+
+image:
+#   repository: directus/directus 
+#   pullPolicy: IfNotPresent
+#   # Overrides the image tag whose default is the chart appVersion.
+  tag: "9.22.4"
+
+# imagePullSecrets: []
+# nameOverride: ""
+# fullnameOverride: ""
+
+# serviceAccount:
+#   # Specifies whether a service account should be created
+#   create: true
+#   # Annotations to add to the service account
+#   annotations: {}
+#   # The name of the service account to use.
+#   # If not set and create is true, a name is generated using the fullname template
+#   name: ""
+
+podAnnotations: #{}
+  config-version: "${configmap_version}"
+
+# podSecurityContext: {}
+#   # fsGroup: 2000
+
+# securityContext: {}
+#   # capabilities:
+#   #   drop:
+#   #   - ALL
+#   # readOnlyRootFilesystem: true
+#   # runAsNonRoot: true
+#   # runAsUser: 1000
+
+# service:
+#   type: ClusterIP
+#   port: 80
+
+ingress:
+  enabled: true
+  annotations: # {}
+    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    # traefik.ingress.kubernetes.io/router.tls: "true"
+    # traefik.ingress.kubernetes.io/router.tls.certresolver: le
+  hosts:
+    - host: ${domain}
+      paths:
+      - path: /
+        pathType: ImplementationSpecific
+#   tls: []
+#   #  - secretName: chart-example-tls
+#   #    hosts:
+#   #      - chart-example.local
+
+extraEnvVars: #{}
+  # An array to add extra environment variables
+  # E.g.
+  # extraEnvVars:
+  #  - name: STORAGE_LOCATIONS
+  #    value: "s3"
+  #  - name: KEY
+  #    value: "$${key}"
+  #  - name: SECRET
+  #    value: "$${secret}"
+  #  - name: PUBLIC_URL
+  #    value: "https://$${domain}"
+  #  - name: AUTH_PROVIDERS
+  #    value: keycloak
+  #  - name: AUTH_KEYCLOAK_DRIVER
+  #    value: openid
+  #  - name: AUTH_KEYCLOAK_CLIENT_ID
+  #    value: "$${client_id}"
+  #  - name: AUTH_KEYCLOAK_CLIENT_SECRET
+  #    value: "$${client_secret}"
+   - name: AUTH_KEYCLOAK_ISSUER_URL
+     value: "https://$${auth_domain}/realms/${auth_realm}/.well-known/openid-configuration"
+  #  - name: AUTH_KEYCLOAK_IDENTIFIER_KEY
+  #    value: email
+  #  - name: AUTH_KEYCLOAK_ALLOW_PUBLIC_REGISTRATION
+  #    value: 'true'
+  #  - name: ADMIN_EMAIL
+  #    value: "$${admin_email}"
+  #  - name: ADMIN_PASSWORD
+  #    value: "$${admin_password}"
+  # AUTH_KEYCLOAK_DEFAULT_ROLE_ID: $ROLE_ID
+  # AUTH_KEYCLOAK_PARAMS: # custom params
+
+extraEnvFrom: #[]
+  # add environment variables from secrets or config maps
+  # E.g.
+  - secretRef:
+      name: "${directus_environment_secret}"
+
+# extraVolumeMounts: #[]
+#   # add additional volume mounts to the directus container
+#   # E.g.
+#   - name: snapshot
+#     mountPath: /directus/snapshot.yaml
+#     subPath: snapshot.yaml
+
+# extraVolumes: #[]
+#   # define extra volumes for the pod
+#   # E.g.
+#   - name: snapshot
+#     configMap:
+#       name: directus-snapshot
+
+extraInitContainers: []
+  # any additional init containers
+
+extraSidecars: []
+  # any sidecars for the directus container
+
+# resources: {}
+#   # We usually recommend not to specify default resources and to leave this as a conscious
+#   # choice for the user. This also increases chances charts run on environments with little
+#   # resources, such as Minikube. If you do want to specify resources, uncomment the following
+#   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+#   # limits:
+#   #   cpu: 100m
+#   #   memory: 128Mi
+#   # requests:
+#   #   cpu: 100m
+#   #   memory: 128Mi
+
+# autoscaling:
+#   enabled: false
+#   minReplicas: 1
+#   maxReplicas: 100
+#   targetCPUUtilizationPercentage: 80
+#   # targetMemoryUtilizationPercentage: 80
+
+# nodeSelector: {}
+
+# tolerations: []
+
+# affinity: {}
+
+mariadb:
+  enabled: false
+
+redis:
+  enabled: false
+  ## @section Global parameters
+  ## Global Docker image parameters
+  ## Please, note that this will override the image parameters, including dependencies, configured to use the global value
+  ## Current available global Docker image parameters: imageRegistry, imagePullSecrets and storageClass
+
+  ## @param global.imageRegistry Global Docker image registry
+  ## @param global.imagePullSecrets Global Docker registry secret names as an array
+  ## @param global.storageClass Global StorageClass for Persistent Volume(s)
+  ## @param global.redis.password Global Redis(TM) password (overrides `auth.password`)
+  ##
+  global:
+    imageRegistry:
+    ## E.g.
+    ## imagePullSecrets:
+    ##   - myRegistryKeySecretName
+    ##
+    imagePullSecrets: []
+    # storageClass: "$${storage_class}"
+    redis:
+      password: "${redis_password}"
+
+  master:
+    persistence:
+#       ## @param master.persistence.enabled Enable persistence on Redis(TM) master nodes using Persistent Volume Claims
+#       ##
+      enabled: false
+
+  replica:
+    persistence:
+#       ## @param replica.persistence.enabled Enable persistence on Redis(TM) replicas nodes using Persistent Volume Claims
+#       ##
+      enabled: false
