@@ -14,24 +14,26 @@ terraform {
     }
   }
 
-  backend "azurerm" {
-    resource_group_name  = "tfstate"
-    storage_account_name = "tfstate2693456765613"
-    container_name       = "tfstate"
-    key                  = "terraform.tfstate"
-  }
+  #backend "azurerm" {
+  #  resource_group_name  = "tfstate"
+  #  storage_account_name = "tfstate2693456765613"
+  #  container_name       = "tfstate"
+  #  key                  = "terraform.tfstate"
+  #}
 
   required_version = ">= 0.14"
 }
 
 provider "kubernetes" {
-  config_path    = module.aks.kube_config #"~/.kube/config"
+  # config_path    = module.aks.kube_config #"~/.kube/config"
+  config_path = "/etc/rancher/k3s/k3s.yaml"
 }
 
 provider "helm" {
   kubernetes {
-    config_path = module.aks.kube_config
+    # config_path = module.aks.kube_config
     # config_context = "floodnet"
+    config_path = "/etc/rancher/k3s/k3s.yaml"
   }
 }
 
@@ -50,7 +52,7 @@ provider "postgresql" {
 
 provider "keycloak" {
     # url           = "http://${helm_release.keycloak.name}.${var.namespace}"
-    url           = "https://${module.app.auth_domain}"
+    url           = "https://${module.services.auth_domain}"
     client_id     = "admin-cli"
     username = var.admin_user
     password = var.admin_pass

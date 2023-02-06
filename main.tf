@@ -1,8 +1,5 @@
 module "db" {
   source = "./db"
-  domain = var.domain
-  domain_email = var.domain_email
-  namespace = var.namespace
 }
 
 module "services" {
@@ -20,10 +17,9 @@ module "services" {
   db_super_user = module.db.super_user
   db_super_pass = module.db.super_pass
 
-  s3_service_name = module.db.s3_service_name
-  s3_user = module.db.s3_user
-  s3_pass = module.db.s3_pass
-  depends_on = [module.db]
+  #s3_service_name = module.db.s3_service_name
+  #s3_user = module.db.s3_user
+  #s3_pass = module.db.s3_pass
 }
 
 # module "app" {

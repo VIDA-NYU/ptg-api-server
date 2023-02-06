@@ -25,6 +25,35 @@ variable "app_name" {
   default = "default"
 }
 
+
+# ---------------------------------------------------------------------------- #
+#                              Database Variables                              #
+# ---------------------------------------------------------------------------- #
+
+
+variable "db_super_user" {
+}
+
+variable "db_super_pass" {
+  sensitive = true
+}
+
+variable "db_name" {
+}
+
+variable "db_service_name" {
+}
+
+# variable "s3_user" {
+# }
+# 
+# variable "s3_pass" {
+#   sensitive = true
+# }
+# 
+# variable "s3_service_name" {
+# }
+
 # ---------------------------------------------------------------------------- #
 #                                    System                                    #
 # ---------------------------------------------------------------------------- #

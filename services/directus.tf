@@ -20,7 +20,8 @@ resource "helm_release" "directus" {
 
   values = [
     replace(templatefile("${path.module}/values/directus.values.yml", {
-      configmap_version = "${kubernetes_secret.directus_environment.metadata.0.resource_version}-${kubernetes_config_map.directus_snapshot.metadata.0.resource_version}"
+      #configmap_version = "${kubernetes_secret.directus_environment.metadata.0.resource_version}-${kubernetes_config_map.directus_snapshot.metadata.0.resource_version}"
+      configmap_version     = kubernetes_secret.directus_environment.metadata.0.resource_version
       redis_password        = random_password.directus_redis_password.result
       domain                = "${var.directus_subdomain}.${var.domain}"
       # oidc

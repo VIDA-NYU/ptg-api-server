@@ -11,7 +11,9 @@
 #     -d postgres \
 #     -c "create database $PG_DATABASE"
 
-
+variable yatai_subdomain {
+  default = "yatai"
+}
 
 # ----------------------------- Setup helm chart ----------------------------- #
 
@@ -25,11 +27,11 @@ resource "helm_release" "yatai" {
   values = [
     replace(templatefile("${path.module}/values/yatai.values.yml", {
       domain = "${var.yatai_subdomain}.${var.domain}"
-        pg_host = var.db_host
+        pg_host = var.db_service_name
         pg_user = postgresql_role.yatai.name
         pg_database = var.db_name
 
-        s3_endpoint=var.s3_service_name
+        s3_endpoint=helm_release.minio.name #var.s3_service_name
         s3_region="local"
         s3_bucketName="yatai"
         # s3_accessKey=random_string.yatai_key.result
@@ -75,7 +77,7 @@ resource "kubernetes_secret" "yatai_secret" {
 
   data = {
     pg_password = random_password.yatai_password.result
-    access_key = random_string.yatai_key.result
-    secret_key = random_password.yatai_secret.result
+    access_key = var.admin_user #random_string.yatai_key.result
+    secret_key = var.admin_pass #random_password.yatai_secret.result
   }
 }

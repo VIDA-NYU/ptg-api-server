@@ -50,7 +50,7 @@ resource "helm_release" "keycloak" {
   timeout = 120
 
   values = [
-    replace(templatefile("${path.module}/values/keycloakx.values.yml", {
+    replace(templatefile("${path.module}/values/keycloak.values.yml", {
       domain = "${var.auth_subdomain}.${var.domain}"
       db_host = "${var.db_service_name}.${var.namespace}"
       db_name = var.db_name
