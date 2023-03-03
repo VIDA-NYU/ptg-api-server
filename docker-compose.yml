@@ -1,20 +1,19 @@
 version: '3.7'
 services:
-  # faasd:
-  #   build:
-  #     context: ./faasd
-  #   container_name: faasd
-  #   ports:
-  #     - 8080:8080
 
-  mlflow:
-    image: ghcr.io/mlflow/mlflow
-    container_name: mlflow
-    command: mlflow ui --host=0.0.0.0
-    ports:
-      - 8091:5000
-    #volumes:
-    # - ${DATA_VOLUME}/mlflow:
+  # Host design
+  # - db.$DOMAIN: directus - doesn't like being under a prefix
+  # - auth.$DOMAIN: keycloak - there's no reason to put it under a subpath
+  # - pgadmin.$DOMAIN: pgadmin - this is an admin tool, not an api
+  # - minio.$DOMAIN: minio - doesn't support subpaths at all
+  # - s3.$DOMAIN: minio s3 - same
+  # - $DOMAIN/streams: redis-streamer - api streaming component
+  # - $DOMAIN/mlflow: mlflow - 
+
+
+  # -------------------------------------------------------------------------- #
+  #                                Data Storage                                #
+  # -------------------------------------------------------------------------- #
 
   directus:
     image: directus/directus:latest
@@ -27,12 +26,15 @@ services:
         directus-extension-board-layout 
         directus-extension-api-trigger-interface 
         directus-extension-vgrid-interface;
-        mkdir -p /directus/extensions/modules/api-viewer && wget -O /directus/extensions/modules/api-viewer/index.js "https://github.com/u12206050/directus-extension-api-viewer-module/releases/download/1.1.1/index.js";
-        mkdir -p /directus/extensions/modules/generate-types && wget -O /directus/extensions/modules/generate-types/index.js "https://github.com/maltejur/directus-extension-generate-types/releases/download/0.4.1/index.js";
+        [[ ! -f /directus/extensions/modules/api-viewer/index.js ]] && mkdir -p /directus/extensions/modules/api-viewer && wget -O /directus/extensions/modules/api-viewer/index.js "https://github.com/u12206050/directus-extension-api-viewer-module/releases/download/1.1.1/index.js";
+        [[ ! -f /directus/extensions/modules/generate-types/index.js ]] && mkdir -p /directus/extensions/modules/generate-types && wget -O /directus/extensions/modules/generate-types/index.js "https://github.com/maltejur/directus-extension-generate-types/releases/download/0.4.1/index.js";
         npx directus bootstrap && npx directus start
     # wget "https://github.com/maltejur/directus-extension-generate-types/releases/download/0.4.1/index.js" /directus/extensions/modules/generate-types/index.js &&
-    ports:
-      - 8090:8055
+    # ports:
+    #   - 8090:8055
+    depends_on:
+      - db
+      - minio
     volumes:
       - ${DATA_VOLUME}/directus/uploads:/directus/uploads
       - ${DATA_VOLUME}/directus/database:/directus/database  # sqlite
@@ -50,7 +52,20 @@ services:
       DB_PASSWORD: $ADMIN_PASS
       ADMIN_EMAIL: $ADMIN_EMAIL
       ADMIN_PASSWORD: $ADMIN_PASS
-      # PUBLIC_URL: "https://sensor-meta.${DOMAIN}"
+      PUBLIC_URL: "http://db.${DOMAIN}"
+      # PUBLIC_URL: "http://${DOMAIN}/db"
+      # PUBLIC_URL: "/db"
+
+      # AUTH_DISABLE_DEFAULT: 'true'
+      AUTH_PROVIDERS: keycloak
+      AUTH_KEYCLOAK_DRIVER: openid
+      AUTH_KEYCLOAK_CLIENT_ID: directus
+      AUTH_KEYCLOAK_CLIENT_SECRET: $DIRECTUS_CLIENT_SECRET
+      AUTH_KEYCLOAK_ISSUER_URL: http://keycloak:8080/realms/${KC_REALM:-master}/.well-known/openid-configuration
+      AUTH_KEYCLOAK_IDENTIFIER_KEY: email
+      # AUTH_KEYCLOAK_DEFAULT_ROLE_ID: $ROLE_ID
+      AUTH_KEYCLOAK_ALLOW_PUBLIC_REGISTRATION: 'true'
+      # AUTH_KEYCLOAK_PARAMS: # custom params
 
       STORAGE_LOCATIONS: s3
       STORAGE_S3_DRIVER: s3
@@ -60,65 +75,335 @@ services:
       STORAGE_S3_ENDPOINT: 'http://minio:9000'
       STORAGE_S3_S3_FORCE_PATH_STYLE: 'true'
     restart: always
+    labels:
+      - "traefik.enable=true"
+      # - "traefik.docker.network=web"
+      # - "traefik.directus.frontend.rule=Host:${DOMAIN};PathPrefixStrip:/db;PathPrefix:/db"
+      # - "traefik.directus.port=8055"
+      # - "traefik.directus.protocol=http"
+      - "traefik.http.routers.directus.rule=Host(`db.${DOMAIN}`)" # && PathPrefix(`/db`)
+      - "traefik.http.routers.directus.entrypoints=web"
+      # - "traefik.http.routers.directus.middlewares=directus-stripprefix"
+      # - "traefik.http.middlewares.directus-stripprefix.stripprefix.prefixes=/db"
 
   db:
     container_name: postgres
     image: postgis/postgis:13-master
     volumes:
+      - ./postgres.initdb.d:/docker-entrypoint-initdb.d
       - ${DATA_VOLUME}/postgres:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: $ADMIN_USER
       POSTGRES_PASSWORD: $ADMIN_PASS
       POSTGRES_DB: postgres
+  
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    # ports:
+    #  - 8070:80
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "${ADMIN_EMAIL}"
+      PGADMIN_DEFAULT_PASSWORD: "${ADMIN_PASS}"
+      PGADMIN_CONFIG_SERVER_MODE: 'True'
+      PGHOST: db
+      PGPORT: '5432'
+      PGDATABASE: postgres
+      PGUSER: $ADMIN_USER
+      PGPASSWORD: $ADMIN_PASS
+      SCRIPT_NAME: /pgadmin
+    # volumes:
+    #    - "${DATA_VOLUME}/pgadmin:/var/lib/pgadmin"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      # # - "traefik.basic.frontend.rule=Host:pgadmin.${DOMAIN}"
+      # - "traefik.pgadmin.frontend.rule=Host:${DOMAIN};Host:PathPrefixStrip:/pgadmin;PathPrefix:/pgadmin"
+      # - "traefik.docker.network=web"
+      # - "traefik.pgadmin.port=9001"
+      # - "traefik.pgadmin.protocol=http"
+      - "traefik.http.routers.pgadmin.rule=Host(`${DOMAIN}`) && PathPrefix(`/pgadmin`)"
+      - "traefik.http.routers.pgadmin.entrypoints=web"
+      # - "traefik.http.routers.pgadmin.middlewares=pgadmin-stripprefix"
+      # - "traefik.http.middlewares.pgadmin-stripprefix.stripprefix.prefixes=/pgadmin"
 
   minio:
     image: minio/minio
     container_name: minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+    # ports:
+    #   - "9000:9000"
+    #   - "9001:9001"
     volumes:
       - ${DATA_VOLUME}/minio:/data
     environment:
       MINIO_ROOT_USER: $ADMIN_USER
       MINIO_ROOT_PASSWORD: $ADMIN_PASS
+
+      # MINIO_IDENTITY_OPENID_CONFIG_URL: http://keycloak:8080/realms/${REALM:-master}/.well-known/openid-configuration
+      # MINIO_IDENTITY_OPENID_CLIENT_ID: minio
+      # MINIO_IDENTITY_OPENID_CLIENT_SECRET: $MINIO_CLIENT_SECRET
+      # MINIO_IDENTITY_OPENID_REDIRECT_URI: http://minio.${DOMAIN}/oauth_callback
     command: server --console-address ":9001" /data
+    labels:
+      - "traefik.enable=true"
+      # # - "traefik.basic.frontend.rule=Host:s3.${DOMAIN}"
+      # - "traefik.s3.frontend.rule=Host:${DOMAIN};PathPrefixStrip:/s3;PathPrefix:/s3"
+      # - "traefik.docker.network=web"
+      # - "traefik.s3.port=9001"
+      # - "traefik.s3.protocol=http"
+      - traefik.http.routers.minio.rule=Host(`minio.${DOMAIN}`)
+      - traefik.http.routers.minio.entrypoints=web
+      - traefik.http.routers.minio.service=minio
+      - traefik.http.services.minio.loadbalancer.server.port=9001
+      - traefik.http.routers.s3.rule=Host(`s3.${DOMAIN}`)
+      - traefik.http.routers.s3.entrypoints=web
+      - traefik.http.routers.s3.service=s3
+      - traefik.http.services.s3.loadbalancer.server.port=9000
+
+
+  # -------------------------------------------------------------------------- #
+  #                               Data Streaming                               #
+  # -------------------------------------------------------------------------- #
   
-  redisstreamer:
+  streamer:
+    image: redis-streamer
     build: redis-streamer
     container_name: redis-streamer
-    ports:
-     - 8000:8000
+    # ports:
+    #  - 8000:8000
     #volumes:
     #  - ./redis_streamer:/src/redis_streamer
     environment:
       REDIS_URL: redis://redis:6379
       DISABLE_MULTI_DEVICE_PREFIXING: "1"
-    #depends_on:
-    #  - redis
+    depends_on:
+     - redis
     restart: unless-stopped
+    labels:
+      # - "traefik.docker.network=web"
+      - "traefik.enable=true"
+      # - "traefik.streams.frontend.rule=Host:${DOMAIN};PathPrefixStrip:/streams;PathPrefix:/streams"
+      # - "traefik.streams.port=8000"
+      # - "traefik.streams.protocol=http"
+      - "traefik.http.routers.streams.rule=Host(`${DOMAIN}`) && PathPrefix(`/streams`)"
+      - "traefik.http.routers.streams.entrypoints=web"
+      - "traefik.http.routers.streams.middlewares=traefik-forward-auth,streams-stripprefix"
+      - "traefik.http.middlewares.streams-stripprefix.stripprefix.prefixes=/streams"
+      # - "traefik.http.middlewares.streams.chain.middlewares=streams-stripprefix,traefik-forward-auth"
 
-  # redis:
-  #   image: redis:7
-  #   container_name: redis
-  #   restart: unless-stopped
+  redis:
+    image: redis:7
+    container_name: redis
+    restart: unless-stopped
+    volumes:
+      - ./redis/redis_6789.conf:/usr/local/etc/redis/redis.conf
+    environment:
+      ALLOW_EMPTY_PASSWORD: 'yes'
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 1s
+      timeout: 3s
+      retries: 5
+
+
+
+  
+
+  # faasd:
+  #   build:
+  #     context: ./faasd
+  #   container_name: faasd
   #   ports:
-  #     - 6379:6379
-  #   volumes:
-  #     - ./redis/redis_6789.conf:/usr/local/etc/redis/redis.conf
-  #   environment:
-  #     ALLOW_EMPTY_PASSWORD: 'yes'
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
-  #     interval: 1s
-  #     timeout: 3s
-  #     retries: 5
+  #     - 8080:8080
 
-networks:
-  default:
-    name: ptg
-    external: true
-  web:
-    external: true
-    name: web
+  mlflow:
+    image: ghcr.io/mlflow/mlflow
+    container_name: mlflow
+    command: mlflow ui --host=0.0.0.0 --static-prefix /mlflow
+    expose: ['5000']
+    # ports:
+    #   - 8091:5000
+    #volumes:
+    # - ${DATA_VOLUME}/mlflow:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mlflow.rule=Host(`${DOMAIN}`) && PathPrefix(`/mlflow`)"
+      - "traefik.http.routers.mlflow.entrypoints=web"
+      - "traefik.http.routers.mlflow.middlewares=traefik-forward-auth"
+      # - "traefik.http.routers.mlflow.middlewares=mlflow-stripprefix"
+      # - "traefik.http.middlewaresauth.${DOMAIN}mlflow-stripprefix.stripprefix.prefixes=/mlflow"
+
+
+  labelstudio:
+    image: heartexlabs/label-studio:latest
+    depends_on:
+      - db
+    environment:
+      POSTGRE_NAME: postgres
+      POSTGRE_USER: ${ADMIN_USER}
+      POSTGRE_PASSWORD: ${ADMIN_PASS}
+      POSTGRE_PORT: 5432
+      POSTGRE_HOST: db
+      LABEL_STUDIO_HOST: label.${DOMAIN}
+    volumes:
+      - ${DATA_VOLUME}/label-studio:/label-studio/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.labelstudio.rule=Host(`label.${DOMAIN}`)"
+      - "traefik.http.routers.labelstudio.entrypoints=web"
+      - "traefik.http.routers.labelstudio.middlewares=traefik-forward-auth"
+
+  # fiftyone:
+  #   build:
+  #     context: ./fiftyone
+  #   container_name: fiftyone
+  #   ports:
+  #     - 5151:5151
+
+
+  # caprover:
+  #   image: caprover/caprover
+  #   container_name: caprover
+  #   # ports:
+  #   #   - 8091:5000
+  #   volumes:
+  #    - /var/run/docker.sock:/var/run/docker.sock
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.mlflow.rule=Host(`f.${DOMAIN}`)"
+  #     - "traefik.http.routers.mlflow.entrypoints=web"
+  #     - "traefik.http.routers.mlflow.middlewares=traefik-forward-auth"
+
+  # -------------------------------------------------------------------------- #
+  #                               Authentication                               #
+  # -------------------------------------------------------------------------- #
+  
+  keycloak:
+    image: quay.io/keycloak/keycloak:20.0.1
+    container_name: keycloak
+    restart: unless-stopped
+    command: start-dev
+    depends_on:
+      - db
+    # ports:
+    #  - 8099:8080
+    environment:
+      KC_HOSTNAME: auth.${DOMAIN}
+      # KC_HOSTNAME: ${DOMAIN}
+      # KC_HOSTNAME_STRICT: "false"
+      # KC_HOSTNAME_PATH: /auth
+      # KC_HTTP_RELATIVE_PATH: /auth
+      KC_DB_URL_HOST: db
+      KC_DB_URL_PORT: '5432'
+      # it needs both for some reason
+      KC_DB: postgres
+      KC_DB_URL_DATABASE: postgres
+
+      KC_DB_SCHEMA: keycloak
+      KC_DB_USERNAME: "${ADMIN_USER}"
+      KC_DB_PASSWORD: "${ADMIN_PASS}"
+      KEYCLOAK_ADMIN: "${ADMIN_USER}"
+      KEYCLOAK_ADMIN_PASSWORD: "${ADMIN_PASS}"
+
+      # JDBC_PARAMS: "useSSL=false&currentSchema=keycloak"
+      # JAVA_OPTS_APPEND: "-Djgroups.dns.query=keycloak-headless"
+      KC_HTTP_ENABLED: 'true'
+      KC_PROXY: edge
+
+    labels:
+      # - "traefik.docker.network=web"
+      # - "traefik.enable=true"
+      # # - "traefik.basic.frontend.rule=Host:auth.${DOMAIN}"
+      # - "traefik.auth.frontend.rule=Host:${DOMAIN};PathPrefixStrip:/auth;PathPrefix:/auth"
+      # - "traefik.auth.port=8080"
+      # - "traefik.auth.protocol=http"
+
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=Host(`auth.${DOMAIN}`)" # && PathPrefix(`/auth`)
+      # - "traefik.http.routers.auth.rule=Host(`${DOMAIN}`) && PathPrefix(`/auth`)" #
+      - "traefik.http.routers.auth.entrypoints=web"
+      # - "traefik.http.routers.auth.middlewares=auth-stripprefix"
+      # - "traefik.http.middlewares.auth-stripprefix.stripprefix.prefixes=/auth"
+
+  traefik:
+    image: traefik:v2.7
+    container_name: traefik
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+      - 8082:8080
+    #network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "${DATA_VOLUME}/letsencrypt/config:/letsencrypt"
+      - "${DATA_VOLUME}/letsencrypt/certs:/etc/certs"
+    healthcheck:
+      test: ['CMD', 'traefik', 'healthcheck', '--ping']
+    command:
+      - "--ping"
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--log.level=debug"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=web"
+      - "--entrypoints.web.address=:80"
+      # - "--entrypoints.web.address=:8000"
+      # - "--entrypoints.websecure.address=:443"
+      # - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      # - "--certificatesresolvers.le.acme.httpchallenge=true"
+      # - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      # - "--certificatesresolvers.le.acme.email=${ACME_EMAIL}"
+      # #- "--certificatesresolvers.le.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      # - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+
+  traefik-forward-auth:
+    image: funkypenguin/traefik-forward-auth
+    container_name: traefik-forward-auth
+    environment:
+      CLIENT_ID: traefik-forward-auth
+      CLIENT_SECRET: $TRAEFIK_FORWARD_AUTH_CLIENT_SECRET
+      OIDC_ISSUER: http://keycloak:8080/realms/master
+      SECRET: $SECRET
+      AUTH_HOST: auth.${DOMAIN}
+      COOKIE_DOMAIN: ${DOMAIN}
+      INSECURE_COOKIE: 'true' # Example assumes no https, do not use in production
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-forward-auth.rule=Host(`${DOMAIN}`) && PathPrefix(`/_oauth`)"
+      - "traefik.http.routers.traefik-forward-auth.entrypoints=web"
+      - "traefik.http.middlewares.traefik-forward-auth.forwardauth.address=http://traefik-forward-auth:4181"
+      - "traefik.http.middlewares.traefik-forward-auth.forwardauth.authResponseHeaders=X-Forwarded-User"
+      - "traefik.http.services.traefik-forward-auth.loadbalancer.server.port=4181"
+      - "traefik.http.routers.traefik-forward-auth.middlewares=traefik-forward-auth"
+      # - "traefik.enable=true"
+      # - "traefik.http.middlewares.traefik-forward-auth.forwardauth.authResponseHeaders=X-Forwarded-User"
+      # - "traefik.http.services.traefik-forward-auth.loadbalancer.server.port=4181"
+      # - traefik.port=4181
+      # - traefik.frontend.rule=Host:auth-forward.${DOMAIN}
+      # - traefik.frontend.auth.forward.address=http://traefik-forward-auth:4181
+      # - traefik.frontend.auth.forward.trustForwardHeader=true
+
+  # dns-proxy:
+  #     image: defreitas/dns-proxy-server
+  #     container_name: dns-proxy
+  #     environment:
+  #       - MG_REGISTER_CONTAINER_NAMES=1
+  #     volumes:
+  #       - /var/run/docker.sock:/var/run/docker.sock
+  # dns-proxy:
+  #     image: dvdarias/docker-hoster
+  #     container_name: dns-proxy
+  #     volumes:
+  #       - /var/run/docker.sock:/tmp/docker.sock
+  #       - /etc/hosts:/tmp/hosts
+
+# networks:
+#   default:
+#     name: ptg
+#     external: true
+#   web:
+#     external: true
+#     name: web
 
