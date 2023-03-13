@@ -13,6 +13,7 @@ RUN pip install -r requirements.txt && rm -rf ~/.cache/pip /var/cache/apt/
 
 ENV PYTHONPATH "${PYTHONPATH}:/src"
 
+EXPOSE 8000
 ADD . /src/app
 ENTRYPOINT [ "python" ]
 CMD [ "-m", "gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000" ]
