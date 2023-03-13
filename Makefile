@@ -20,12 +20,8 @@ record: base  ## bring up the recording containers
 	cd ptg-server-ml && docker-compose -f docker-compose.record.yaml up -d --build && cd -
 	
 ml: base  ## bring up the recording containers
-	cd ptgctl
-	docker build -f Dockerfile.gpu -t ptgctl:gpu .
-	cd ..
-	cd ptg-server-ml
-	docker-compose -f docker-compose.ml.yaml up -d --build
-	cd -
+	cd ptgctl && docker build -f Dockerfile.gpu -t ptgctl:gpu .
+	cd ptg-server-ml && docker-compose -f docker-compose.ml.yaml up -d --build
 
 dash:  ## bring up the dashboard containers
 	cd tim-dashboard && ls && docker-compose --env-file ../.env -f docker-compose.prod.yml up -d --build && cd -
