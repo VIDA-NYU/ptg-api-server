@@ -119,6 +119,7 @@ async def push_data_ws(
     try:
         while True:
             ts = None
+            offsets = [None]
             if batch:
                 offsets = orjson.loads(await ws.receive_text())
                 if offsets and isinstance(offsets[0], list):
