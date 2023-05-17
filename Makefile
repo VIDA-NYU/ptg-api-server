@@ -39,10 +39,14 @@ pull:
 	git pull --recurse-submodules
 
 down:  ## docker-compose down everything
+	[ -f ptg-server-ml/.env ] && cd ptg-server-ml && docker-compose \
+		-f docker-compose.ml.yaml \
+		-f docker-compose.record.yaml \
+		down || : 0
+	cd tim-dashboard && docker-compose \
+	    -f docker-compose.prod.yml \
+	    down || : 0
 	docker-compose \
-		-f docker-compose.yaml \
-		-f docker-compose.https.yaml \
-		-f ptg-server-ml/docker-compose.ml.yaml \
-		-f ptg-server-ml/docker-compose.record.yaml \
-		-f tim-dashboard/docker-compose.prod.yaml \
-		down
+        -f docker-compose.yaml \
+        -f docker-compose.https.yaml \
+		down || : 0
