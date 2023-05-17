@@ -12,14 +12,15 @@ https:  ## bring up the https reverse proxy
 	docker-compose -f docker-compose.https.yaml up -d --build
 
 api: base  ## bring just the api services up
+	docker network create web || : 0
 	docker-compose up -d --build
 
 services: api ## alias for api
 
-record: base  ## bring up the recording containers
+record: base baseml  ## bring up the recording containers
 	cd ptg-server-ml && docker-compose -f docker-compose.record.yaml up -d --build && cd -
 	
-ml: base  ## bring up the recording containers
+ml: base baseml  ## bring up the recording containers
 	cd ptgctl && docker build -f Dockerfile.gpu -t ptgctl:gpu .
 	cd ptg-server-ml && docker-compose -f docker-compose.ml.yaml up -d --build
 
@@ -29,6 +30,9 @@ dash:  ## bring up the dashboard containers
 base:  ## build the ptgctl container
 	cp .env ptg-server-ml/.env
 	docker build -t ptgctl -t ptgctl:latest ./ptgctl
+
+baseml: base  ## build the ptgctl container
+	cp .env ptg-server-ml/.env
 	docker build -t ptgprocess -t ptgprocess:latest ./ptg-server-ml
 
 pull:
