@@ -2,6 +2,7 @@ from __future__ import annotations
 from collections import defaultdict
 from functools import cache
 import asyncio
+import redis
 from redis import asyncio as aioredis
 import json
 import os
@@ -46,9 +47,17 @@ class Context:
         url = os.getenv('REDIS_URL')
         if url:
             connection['url'] = url
-        self.redis = await aioredis.from_url(**connection)
-        self.redisClient = await aioredis.from_url(**connection, db=1)
-        await asyncio.gather(self.redis.ping(), self.redisClient.ping())
+
+        while True:
+            try:
+                self.redis = await aioredis.from_url(**connection)
+                self.redisClient = await aioredis.from_url(**connection, db=1)
+                await asyncio.gather(self.redis.ping(), self.redisClient.ping())
+                break
+            except redis.exceptions.ConnectionError as e:
+                await asyncio.sleep(3)
+                print("Error initializing connection to redis.")
+                print(type(e).__name__, e)
 
 
 class Context2:
