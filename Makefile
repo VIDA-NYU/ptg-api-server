@@ -5,7 +5,7 @@ help: ## PTG API Server
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 env: ## create env file
-	[ ! -f .env ] && cp .env.sample .env
+	[ ! -f .env ] && cp .env.sample .env || : 0
 
 full: https api record ml dash  ## bring the full system up
 
