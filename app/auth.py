@@ -93,8 +93,10 @@ class UserAuth:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={'verify_exp': False})
             username: str = payload.get("sub")
             if username is None:
-                raise tokenError
+                return User(username='anon')
+                #raise tokenError
         except JWTError:
-            raise tokenError
+            return User(username='anon')
+            #raise tokenError
         return User(username=username)
         
