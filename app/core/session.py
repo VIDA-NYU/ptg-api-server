@@ -30,8 +30,8 @@ class Session:
 
     async def start_recipe(self, id: str):
         recipe = await recipes.recipe_db.get(id)
-        if not recipe:
-            raise ValueError(f"Recipe {id} not found.")
+        # if not recipe:
+        #     raise ValueError(f"Recipe {id} not found.")
         session_id = str(int(time.time()))
         async with ctx.redis.pipeline() as pipe:
             pipe.set(RECIPE_ID, id)
